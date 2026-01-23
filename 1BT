@@ -71,7 +71,7 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.BorderSizePixel = 0
 mainFrame.Visible = false
-mainFrame.ClipsDescendants = true -- FIX SIDEBAR KELUAR: Memotong apapun yang lewat batas
+mainFrame.ClipsDescendants = true 
 mainFrame.Parent = screenGui
 local mainCorner = Instance.new("UICorner"); mainCorner.CornerRadius = UDim.new(0, 12); mainCorner.Parent = mainFrame
 table.insert(transparencyObjects, mainFrame)
@@ -114,8 +114,15 @@ table.insert(transparencyObjects, closeBtn)
 local bodyContainer = Instance.new("Frame")
 bodyContainer.Size = UDim2.new(1, 0, 1, -45); bodyContainer.Position = UDim2.new(0, 0, 0, 45); bodyContainer.BackgroundTransparency = 1; bodyContainer.ZIndex = 2; bodyContainer.ClipsDescendants = true; bodyContainer.Parent = mainFrame
 
-local sidebarContainer = Instance.new("Frame")
-sidebarContainer.Size = UDim2.new(SIDEBAR_WIDTH, 0, 1, 0); sidebarContainer.BackgroundTransparency = 1; sidebarContainer.Parent = bodyContainer
+-- SIDEBAR FIXED: Menggunakan ScrollingFrame
+local sidebarContainer = Instance.new("ScrollingFrame")
+sidebarContainer.Size = UDim2.new(SIDEBAR_WIDTH, 0, 1, 0)
+sidebarContainer.BackgroundTransparency = 1
+sidebarContainer.ScrollBarThickness = 0 -- Hilangkan bar visual agar rapi, tapi tetap bisa discroll
+sidebarContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y -- Bisa memanjang otomatis
+sidebarContainer.CanvasSize = UDim2.new(0,0,0,0)
+sidebarContainer.Parent = bodyContainer
+
 local sidebarLayout = Instance.new("UIListLayout"); sidebarLayout.Padding = UDim.new(0, 6); sidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center; sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder; sidebarLayout.Parent = sidebarContainer
 local sidebarPadding = Instance.new("UIPadding"); sidebarPadding.PaddingTop = UDim.new(0, 15); sidebarPadding.Parent = sidebarContainer
 
@@ -130,11 +137,11 @@ local function createPage(name, visible)
 	page.Size = UDim2.new(1, -15, 1, -15)
 	page.Position = UDim2.new(0, 5, 0, 8)
 	page.BackgroundTransparency = 1
-	page.ScrollBarThickness = 6 -- Agak tebal biar enak di scroll di HP
+	page.ScrollBarThickness = 6 
 	page.ScrollBarImageColor3 = Color3.fromRGB(80,80,90)
 	page.Visible = visible
-	page.AutomaticCanvasSize = Enum.AutomaticSize.Y -- FIX SCROLLING: Otomatis memanjang ke bawah
-	page.CanvasSize = UDim2.new(0,0,0,0) -- Reset manual size
+	page.AutomaticCanvasSize = Enum.AutomaticSize.Y 
+	page.CanvasSize = UDim2.new(0,0,0,0) 
 	page.Parent = pagesFolder
 
 	local layout = Instance.new("UIListLayout")
@@ -142,8 +149,7 @@ local function createPage(name, visible)
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = page
-	
-	-- Padding bawah supaya tombol paling bawah tidak kepotong
+
 	local pad = Instance.new("UIPadding")
 	pad.PaddingBottom = UDim.new(0, 20)
 	pad.PaddingTop = UDim.new(0, 5)
@@ -198,7 +204,37 @@ local function createInputBox(parent, placeholder, callback)
 	return box
 end
 
--- 1. Auto E
+-- ===================================
+-- 1. LOCAL TAB (Auto E, Speed, Noclip, DROPTOOLS)
+-- ===================================
+
+-- DROP TOOLS BUTTON
+local dropBtn = Instance.new("TextButton")
+dropBtn.Size = UDim2.new(0.96, 0, 0, 45)
+dropBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50) -- Merah
+dropBtn.Text = "DROP ALL TOOLS"
+dropBtn.TextColor3 = Color3.new(1,1,1)
+dropBtn.Font = Enum.Font.GothamBlack
+dropBtn.TextSize = 14
+dropBtn.Parent = pageLocal
+local dropCorner = Instance.new("UICorner"); dropCorner.CornerRadius = UDim.new(0, 8); dropCorner.Parent = dropBtn
+table.insert(transparencyObjects, dropBtn)
+
+dropBtn.MouseButton1Click:Connect(function()
+	for i,v in pairs(Players.LocalPlayer.Backpack:GetChildren()) do
+		if v:IsA("Tool") then
+			v.Parent = Players.LocalPlayer.Character
+		end
+	end
+	wait()
+	for i,v in pairs(Players.LocalPlayer.Character:GetChildren()) do
+		if v:IsA("Tool") then
+			v.Parent = workspace
+		end
+	end
+end)
+
+-- Auto E
 createToggle(pageLocal, "Auto Press E (0.1s)", false, function(state)
 	autoEEnabled = state
 	if state then
@@ -213,7 +249,7 @@ createToggle(pageLocal, "Auto Press E (0.1s)", false, function(state)
 	end
 end)
 
--- 2. Walkspeed
+-- Walkspeed
 createInputBox(pageLocal, "Set Walkspeed (16 - 200)", function(text) local num = tonumber(text); if num then targetWalkSpeed = num end end)
 createToggle(pageLocal, "Enable Walkspeed Loop", false, function(state)
 	walkSpeedEnabled = state
@@ -227,7 +263,7 @@ createToggle(pageLocal, "Enable Walkspeed Loop", false, function(state)
 	end
 end)
 
--- 3. Noclip
+-- Noclip
 createToggle(pageLocal, "Perfect Noclip", false, function(state) noclipEnabled = state end)
 RunService.Stepped:Connect(function()
 	if noclipEnabled and player.Character then
@@ -239,7 +275,9 @@ RunService.Stepped:Connect(function()
 	end
 end)
 
--- 4. ESP
+-- ===================================
+-- 2. VISUALS TAB
+-- ===================================
 createToggle(pageVisuals, "Enemy ESP", false, function(state)
 	espEnabled = state; if not state then for _, v in pairs(game.Workspace:GetDescendants()) do if v.Name == "TycoonESP_Highlight" or v.Name == "TycoonESP_Tag" then v:Destroy() end end end
 end)
@@ -268,7 +306,9 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
--- 5. Combat
+-- ===================================
+-- 3. COMBAT TAB
+-- ===================================
 createInputBox(pageCombat, "Exclude Player (Whitelist)", function(name) table.insert(bringWhitelist, name) end)
 createToggle(pageCombat, "Loop Bring Enemy", false, function(state)
 	loopBringEnabled = state
@@ -294,7 +334,9 @@ tpToEnemyBtn.MouseButton1Click:Connect(function()
 	if #targets > 0 and player.Character then player.Character.HumanoidRootPart.CFrame = targets[math.random(1, #targets)].Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3) end
 end)
 
--- 6. Teleport
+-- ===================================
+-- 4. TELEPORT TAB
+-- ===================================
 local function SmartTeleport(dest)
 	if not player.Character then return end
 	local chosen = nil
@@ -317,23 +359,20 @@ createTeleportSection("--- FLAGS ---", TeleportData.Flags)
 createTeleportSection("--- SPAWNS ---", TeleportData.Spawns)
 createTeleportSection("--- TEAMS ---", TeleportData.Teams)
 
--- ====================================================
--- SETTINGS & TRANSPARENCY FIX
--- ====================================================
-
--- LABEL
+-- ===================================
+-- 5. SETTINGS TAB
+-- ===================================
 local function createSettingLabel(text)
 	local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(0.94, 0, 0, 30); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Color3.fromRGB(150, 150, 150); lbl.Font = Enum.Font.GothamBold;
 	lbl.TextSize = 12; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = pageSettings
 end
 
--- TRANSPARENCY SLIDER
 createSettingLabel("TRANSPARENCY")
 local sliderContainer = Instance.new("Frame"); sliderContainer.Size = UDim2.new(0.94, 0, 0, 30); sliderContainer.BackgroundTransparency = 1; sliderContainer.Parent = pageSettings
 local sliderBar = Instance.new("Frame"); sliderBar.Name = "Bar"; sliderBar.Size = UDim2.new(0.95, 0, 0, 6); sliderBar.AnchorPoint = Vector2.new(0.5, 0.5); sliderBar.Position = UDim2.new(0.5, 0, 0.5, 0); sliderBar.BackgroundColor3 = Color3.fromRGB(60, 60, 70); sliderBar.BorderSizePixel = 0; sliderBar.Parent = sliderContainer
 local barCorner = Instance.new("UICorner"); barCorner.CornerRadius = UDim.new(1,0); barCorner.Parent = sliderBar
 local sliderKnob = Instance.new("TextButton"); sliderKnob.Name = "Knob"; sliderKnob.Text = ""; 
-sliderKnob.Size = UDim2.new(0, 25, 0, 25) -- Knob besar untuk HP
+sliderKnob.Size = UDim2.new(0, 25, 0, 25) 
 sliderKnob.AnchorPoint = Vector2.new(0.5, 0.5); sliderKnob.Position = UDim2.new(0, 0, 0.5, 0); sliderKnob.BackgroundColor3 = Color3.fromRGB(0, 120, 215); sliderKnob.Parent = sliderBar
 local knobCorner = Instance.new("UICorner"); knobCorner.CornerRadius = UDim.new(1,0); knobCorner.Parent = sliderKnob
 local sliderValueLabel = Instance.new("TextLabel"); sliderValueLabel.Size = UDim2.new(0, 50, 1, 0); sliderValueLabel.Position = UDim2.new(-1, 0, -1, 0); sliderValueLabel.BackgroundTransparency = 1; sliderValueLabel.Text = "0%"; sliderValueLabel.TextColor3 = Color3.fromRGB(200, 200, 200); sliderValueLabel.Font = Enum.Font.GothamBold; sliderValueLabel.TextSize = 12; sliderValueLabel.Parent = sliderKnob
@@ -353,7 +392,6 @@ UserInputService.InputEnded:Connect(function(input) if input.UserInputType == En
 UserInputService.InputChanged:Connect(function(input) if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then updateSlider(input.Position) end end)
 sliderFunction = function(valOverride) local val = valOverride or savedTransparency; sliderKnob.Position = UDim2.new(val, 0, 0.5, 0); sliderValueLabel.Text = math.floor(val * 100) .. "%" end
 
--- UNLOAD
 createSettingLabel(" ")
 local unloadBtn = Instance.new("TextButton"); unloadBtn.Size = UDim2.new(0.96, 0, 0, 45); unloadBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50); unloadBtn.Text = "UNLOAD"; unloadBtn.TextColor3 = Color3.new(1,1,1); unloadBtn.Font = Enum.Font.GothamBlack; unloadBtn.Parent = pageSettings; local uc = Instance.new("UICorner"); uc.CornerRadius = UDim.new(0,8); uc.Parent = unloadBtn
 table.insert(transparencyObjects, unloadBtn)
