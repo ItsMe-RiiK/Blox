@@ -3,7 +3,6 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-local Teams = game:GetService("Teams")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -46,6 +45,7 @@ local TeleportData = {
 }
 
 -- === SYSTEM VARIABLES ===
+local sliderFunction = nil
 local transparencyObjects = {} 
 local espEnabled = false
 local noclipEnabled = false
@@ -53,8 +53,7 @@ local autoEEnabled = false
 local walkSpeedEnabled = false
 local targetWalkSpeed = 16
 local loopBringEnabled = false
-local bringTarget = "All" -- "All" atau Nama Player
-local bringWhitelist = {} -- Daftar pengecualian
+local bringWhitelist = {} 
 
 -- 1. SETUP SCREEN GUI
 local screenGui = Instance.new("ScreenGui")
@@ -72,6 +71,7 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.BorderSizePixel = 0
 mainFrame.Visible = false
+mainFrame.ClipsDescendants = true -- FIX SIDEBAR KELUAR: Memotong apapun yang lewat batas
 mainFrame.Parent = screenGui
 local mainCorner = Instance.new("UICorner"); mainCorner.CornerRadius = UDim.new(0, 12); mainCorner.Parent = mainFrame
 table.insert(transparencyObjects, mainFrame)
@@ -112,7 +112,7 @@ table.insert(transparencyObjects, closeBtn)
 
 -- 3. CONTAINER
 local bodyContainer = Instance.new("Frame")
-bodyContainer.Size = UDim2.new(1, 0, 1, -45); bodyContainer.Position = UDim2.new(0, 0, 0, 45); bodyContainer.BackgroundTransparency = 1; bodyContainer.ZIndex = 2; bodyContainer.Parent = mainFrame
+bodyContainer.Size = UDim2.new(1, 0, 1, -45); bodyContainer.Position = UDim2.new(0, 0, 0, 45); bodyContainer.BackgroundTransparency = 1; bodyContainer.ZIndex = 2; bodyContainer.ClipsDescendants = true; bodyContainer.Parent = mainFrame
 
 local sidebarContainer = Instance.new("Frame")
 sidebarContainer.Size = UDim2.new(SIDEBAR_WIDTH, 0, 1, 0); sidebarContainer.BackgroundTransparency = 1; sidebarContainer.Parent = bodyContainer
@@ -126,8 +126,29 @@ local pagesFolder = Instance.new("Folder"); pagesFolder.Name = "Pages"; pagesFol
 -- FUNGSI UI
 local function createPage(name, visible)
 	local page = Instance.new("ScrollingFrame")
-	page.Name = name; page.Size = UDim2.new(1, -15, 1, -15); page.Position = UDim2.new(0, 5, 0, 8); page.BackgroundTransparency = 1; page.ScrollBarThickness = 4; page.Visible = visible; page.Parent = pagesFolder
-	local layout = Instance.new("UIListLayout"); layout.Padding = UDim.new(0, 8); layout.HorizontalAlignment = Enum.HorizontalAlignment.Center; layout.SortOrder = Enum.SortOrder.LayoutOrder; layout.Parent = page
+	page.Name = name
+	page.Size = UDim2.new(1, -15, 1, -15)
+	page.Position = UDim2.new(0, 5, 0, 8)
+	page.BackgroundTransparency = 1
+	page.ScrollBarThickness = 6 -- Agak tebal biar enak di scroll di HP
+	page.ScrollBarImageColor3 = Color3.fromRGB(80,80,90)
+	page.Visible = visible
+	page.AutomaticCanvasSize = Enum.AutomaticSize.Y -- FIX SCROLLING: Otomatis memanjang ke bawah
+	page.CanvasSize = UDim2.new(0,0,0,0) -- Reset manual size
+	page.Parent = pagesFolder
+
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = page
+	
+	-- Padding bawah supaya tombol paling bawah tidak kepotong
+	local pad = Instance.new("UIPadding")
+	pad.PaddingBottom = UDim.new(0, 20)
+	pad.PaddingTop = UDim.new(0, 5)
+	pad.Parent = page
+
 	return page
 end
 
@@ -150,10 +171,10 @@ local function createSidebarButton(text, targetPageName, urutan)
 end
 
 -- ====================================================
--- FITUR: LOCAL PLAYER (Walkspeed, Noclip, Auto E)
+-- FITUR LOGIC
 -- ====================================================
 
--- Toggle Helper
+-- Helper UI Functions
 local function createToggle(parent, text, default, callback)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(0.96, 0, 0, 45); btn.BackgroundColor3 = Color3.fromRGB(45, 45, 50); btn.Text = text .. ": OFF"; btn.TextColor3 = Color3.fromRGB(220, 220, 220); btn.Font = Enum.Font.GothamBold; btn.TextSize = 14; btn.Parent = parent
@@ -169,7 +190,6 @@ local function createToggle(parent, text, default, callback)
 	return btn
 end
 
--- Input Box Helper
 local function createInputBox(parent, placeholder, callback)
 	local box = Instance.new("TextBox")
 	box.Size = UDim2.new(0.96, 0, 0, 40); box.BackgroundColor3 = Color3.fromRGB(35, 35, 40); box.Text = ""; box.PlaceholderText = placeholder; box.TextColor3 = Color3.new(1,1,1); box.Font = Enum.Font.GothamMedium; box.TextSize = 14; box.Parent = parent
@@ -193,65 +213,36 @@ createToggle(pageLocal, "Auto Press E (0.1s)", false, function(state)
 	end
 end)
 
--- 2. Walkspeed (Loop)
-createInputBox(pageLocal, "Set Walkspeed (16 - 200)", function(text)
-	local num = tonumber(text)
-	if num then targetWalkSpeed = num end
-end)
-
+-- 2. Walkspeed
+createInputBox(pageLocal, "Set Walkspeed (16 - 200)", function(text) local num = tonumber(text); if num then targetWalkSpeed = num end end)
 createToggle(pageLocal, "Enable Walkspeed Loop", false, function(state)
 	walkSpeedEnabled = state
 	if state then
 		task.spawn(function()
 			while walkSpeedEnabled do
-				if player.Character and player.Character:FindFirstChild("Humanoid") then
-					player.Character.Humanoid.WalkSpeed = targetWalkSpeed
-				end
-				task.wait() -- Loop cepat tapi hemat, override setiap frame
+				if player.Character and player.Character:FindFirstChild("Humanoid") then player.Character.Humanoid.WalkSpeed = targetWalkSpeed end; task.wait()
 			end
-			-- Reset ke normal saat mati
-			if player.Character and player.Character:FindFirstChild("Humanoid") then
-				player.Character.Humanoid.WalkSpeed = 16
-			end
+			if player.Character and player.Character:FindFirstChild("Humanoid") then player.Character.Humanoid.WalkSpeed = 16 end
 		end)
 	end
 end)
 
--- 3. Perfect Noclip
-createToggle(pageLocal, "Perfect Noclip", false, function(state)
-	noclipEnabled = state
-end)
-
+-- 3. Noclip
+createToggle(pageLocal, "Perfect Noclip", false, function(state) noclipEnabled = state end)
 RunService.Stepped:Connect(function()
 	if noclipEnabled and player.Character then
-		local char = player.Character
-		local hum = char:FindFirstChild("Humanoid")
-		
-		-- Cek jika sedang memanjat tangga, matikan noclip sebentar agar bisa naik
+		local hum = player.Character:FindFirstChild("Humanoid")
 		local isClimbing = hum and hum:GetState() == Enum.HumanoidStateType.Climbing
-		
 		if not isClimbing then
-			for _, part in pairs(char:GetDescendants()) do
-				if part:IsA("BasePart") and part.CanCollide == true then
-					part.CanCollide = false
-				end
-			end
+			for _, part in pairs(player.Character:GetDescendants()) do if part:IsA("BasePart") and part.CanCollide == true then part.CanCollide = false end end
 		end
 	end
 end)
 
--- ====================================================
--- FITUR: VISUALS (ESP) - Sama seperti sebelumnya
--- ====================================================
+-- 4. ESP
 createToggle(pageVisuals, "Enemy ESP", false, function(state)
-	espEnabled = state
-	if not state then 
-		for _, v in pairs(game.Workspace:GetDescendants()) do
-			if v.Name == "TycoonESP_Highlight" or v.Name == "TycoonESP_Tag" then v:Destroy() end
-		end
-	end
+	espEnabled = state; if not state then for _, v in pairs(game.Workspace:GetDescendants()) do if v.Name == "TycoonESP_Highlight" or v.Name == "TycoonESP_Tag" then v:Destroy() end end end
 end)
-
 RunService.RenderStepped:Connect(function()
 	if espEnabled then
 		for _, target in pairs(Players:GetPlayers()) do
@@ -277,147 +268,105 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
--- ====================================================
--- FITUR: COMBAT (Bring Enemy)
--- ====================================================
-
-createInputBox(pageCombat, "Exclude Player (Whitelist)", function(name)
-	table.insert(bringWhitelist, name)
-	print("Added to whitelist:", name)
-end)
-
-local function getTarget()
-	local targets = {}
-	for _, v in pairs(Players:GetPlayers()) do
-		if v ~= player and v.Team ~= player.Team then
-			-- Cek whitelist
-			local isWhitelisted = false
-			for _, white in pairs(bringWhitelist) do
-				if string.find(v.Name:lower(), white:lower()) then isWhitelisted = true end
-			end
-			
-			if not isWhitelisted and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-				table.insert(targets, v)
-			end
-		end
-	end
-	return targets
-end
-
-createToggle(pageCombat, "Loop Bring Enemy (Requires Tool/Collision)", false, function(state)
+-- 5. Combat
+createInputBox(pageCombat, "Exclude Player (Whitelist)", function(name) table.insert(bringWhitelist, name) end)
+createToggle(pageCombat, "Loop Bring Enemy", false, function(state)
 	loopBringEnabled = state
 	if state then
 		task.spawn(function()
 			while loopBringEnabled do
-				local targets = getTarget()
-				if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-					local myPos = player.Character.HumanoidRootPart.CFrame
-					for _, target in pairs(targets) do
-						if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-							-- COBA BAWA MUSUH KE KITA
-							-- Metode 1: CFrame Manipulation (Hanya work jika kita punya network ownership atau game unsecure)
-							target.Character.HumanoidRootPart.CFrame = myPos * CFrame.new(0, 0, -3)
-						end
+				for _, v in pairs(Players:GetPlayers()) do
+					if v ~= player and v.Team ~= player.Team and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+						local isWhite = false; for _, w in pairs(bringWhitelist) do if string.find(v.Name:lower(), w:lower()) then isWhite = true end end
+						if not isWhite then v.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3) end
 					end
-				end
-				task.wait()
+				end; task.wait()
 			end
 		end)
 	end
 end)
-
 local tpToEnemyBtn = Instance.new("TextButton")
-tpToEnemyBtn.Size = UDim2.new(0.96, 0, 0, 45); tpToEnemyBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50); tpToEnemyBtn.Text = "TELEPORT TO NEAREST ENEMY"; tpToEnemyBtn.TextColor3 = Color3.new(1,1,1); tpToEnemyBtn.Font = Enum.Font.GothamBold; tpToEnemyBtn.TextSize = 14; tpToEnemyBtn.Parent = pageCombat
+tpToEnemyBtn.Size = UDim2.new(0.96, 0, 0, 45); tpToEnemyBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50); tpToEnemyBtn.Text = "TP TO NEAREST ENEMY"; tpToEnemyBtn.TextColor3 = Color3.new(1,1,1); tpToEnemyBtn.Font = Enum.Font.GothamBold; tpToEnemyBtn.TextSize = 14; tpToEnemyBtn.Parent = pageCombat
 local tpCorner = Instance.new("UICorner"); tpCorner.CornerRadius = UDim.new(0, 8); tpCorner.Parent = tpToEnemyBtn
 table.insert(transparencyObjects, tpToEnemyBtn)
-
 tpToEnemyBtn.MouseButton1Click:Connect(function()
-	local targets = getTarget()
-	if #targets > 0 and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-		local target = targets[math.random(1, #targets)] -- Pilih acak atau bisa diubah ke terdekat
-		player.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
-	end
+	local targets = {}; for _, v in pairs(Players:GetPlayers()) do if v ~= player and v.Team ~= player.Team and v.Character then table.insert(targets, v) end end
+	if #targets > 0 and player.Character then player.Character.HumanoidRootPart.CFrame = targets[math.random(1, #targets)].Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3) end
 end)
 
-
--- ====================================================
--- FITUR: SMART TELEPORT (SafeZone Check)
--- ====================================================
-
-local function IsSafeZoneValid(pos)
-	-- Cek apakah ada pijakan di koordinat safezone (Raycast ke bawah)
-	local origin = pos + Vector3.new(0, 5, 0)
-	local direction = Vector3.new(0, -20, 0)
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterDescendantsInstances = {player.Character}
-	
-	local result = workspace:Raycast(origin, direction, raycastParams)
-	if result then
-		return true -- Ada part dibawah, aman
-	else
-		return false -- Void / Tidak ada part
+-- 6. Teleport
+local function SmartTeleport(dest)
+	if not player.Character then return end
+	local chosen = nil
+	for _, sz in pairs(TeleportData.SafeZones) do
+		local res = workspace:Raycast(sz + Vector3.new(0,5,0), Vector3.new(0,-20,0), RaycastParams.new())
+		if res then chosen = sz; break end
 	end
+	if chosen then player.Character.HumanoidRootPart.CFrame = CFrame.new(chosen + Vector3.new(0,3,0)); task.wait(0.2) end
+	player.Character.HumanoidRootPart.CFrame = CFrame.new(dest + Vector3.new(0,3,0))
 end
-
-local function SmartTeleport(destination)
-	if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
-	
-	-- 1. Cari SafeZone yang valid
-	local chosenSafeZone = nil
-	for _, szPos in pairs(TeleportData.SafeZones) do
-		if IsSafeZoneValid(szPos) then
-			chosenSafeZone = szPos
-			break -- Ketemu yang valid, stop loop
-		end
-	end
-	
-	-- 2. Proses Teleport
-	if chosenSafeZone then
-		-- TP ke SafeZone dulu
-		player.Character.HumanoidRootPart.CFrame = CFrame.new(chosenSafeZone + Vector3.new(0, 3, 0))
-		-- Tunggu sebentar (bisa disesuaikan)
-		task.wait(0.2)
-	end
-	
-	-- 3. TP ke Tujuan Asli
-	player.Character.HumanoidRootPart.CFrame = CFrame.new(destination + Vector3.new(0, 3, 0))
-end
-
-local function createTeleportSection(headerText, dataList)
-	local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(1,0,0,25); lbl.Text = headerText; lbl.BackgroundTransparency=1; lbl.TextColor3=Color3.fromRGB(255,200,50); lbl.Font=Enum.Font.GothamBold; lbl.Parent=pageTeleport
-	
+local function createTeleportSection(header, dataList)
+	local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(1,0,0,25); lbl.Text = header; lbl.BackgroundTransparency=1; lbl.TextColor3=Color3.fromRGB(255,200,50); lbl.Font=Enum.Font.GothamBold; lbl.Parent=pageTeleport
 	for _, data in pairs(dataList) do
-		local btn = Instance.new("TextButton")
-		btn.Size = UDim2.new(0.96, 0, 0, 35); btn.BackgroundColor3 = Color3.fromRGB(40, 40, 45); btn.Text = data.Name; btn.TextColor3 = Color3.fromRGB(200, 200, 200); btn.Font = Enum.Font.GothamMedium; btn.TextSize = 12; btn.Parent = pageTeleport
-		local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = btn
-		table.insert(transparencyObjects, btn)
-		
-		btn.MouseButton1Click:Connect(function()
-			SmartTeleport(data.Pos)
-		end)
+		local btn = Instance.new("TextButton"); btn.Size = UDim2.new(0.96, 0, 0, 35); btn.BackgroundColor3 = Color3.fromRGB(40, 40, 45); btn.Text = data.Name; btn.TextColor3 = Color3.fromRGB(200, 200, 200); btn.Font = Enum.Font.GothamMedium; btn.TextSize = 12; btn.Parent = pageTeleport
+		local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = btn; table.insert(transparencyObjects, btn)
+		btn.MouseButton1Click:Connect(function() SmartTeleport(data.Pos) end)
 	end
 end
-
 createTeleportSection("--- FLAGS ---", TeleportData.Flags)
 createTeleportSection("--- SPAWNS ---", TeleportData.Spawns)
 createTeleportSection("--- TEAMS ---", TeleportData.Teams)
-createTeleportSection("--- SAFEZONES (Direct) ---", {{Name="Red SZ", Pos=TeleportData.SafeZones[1]}, {Name="Green SZ", Pos=TeleportData.SafeZones[2]}})
-
 
 -- ====================================================
--- SETTINGS & TOGGLE MENU
+-- SETTINGS & TRANSPARENCY FIX
 -- ====================================================
+
+-- LABEL
+local function createSettingLabel(text)
+	local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(0.94, 0, 0, 30); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Color3.fromRGB(150, 150, 150); lbl.Font = Enum.Font.GothamBold;
+	lbl.TextSize = 12; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = pageSettings
+end
+
+-- TRANSPARENCY SLIDER
+createSettingLabel("TRANSPARENCY")
+local sliderContainer = Instance.new("Frame"); sliderContainer.Size = UDim2.new(0.94, 0, 0, 30); sliderContainer.BackgroundTransparency = 1; sliderContainer.Parent = pageSettings
+local sliderBar = Instance.new("Frame"); sliderBar.Name = "Bar"; sliderBar.Size = UDim2.new(0.95, 0, 0, 6); sliderBar.AnchorPoint = Vector2.new(0.5, 0.5); sliderBar.Position = UDim2.new(0.5, 0, 0.5, 0); sliderBar.BackgroundColor3 = Color3.fromRGB(60, 60, 70); sliderBar.BorderSizePixel = 0; sliderBar.Parent = sliderContainer
+local barCorner = Instance.new("UICorner"); barCorner.CornerRadius = UDim.new(1,0); barCorner.Parent = sliderBar
+local sliderKnob = Instance.new("TextButton"); sliderKnob.Name = "Knob"; sliderKnob.Text = ""; 
+sliderKnob.Size = UDim2.new(0, 25, 0, 25) -- Knob besar untuk HP
+sliderKnob.AnchorPoint = Vector2.new(0.5, 0.5); sliderKnob.Position = UDim2.new(0, 0, 0.5, 0); sliderKnob.BackgroundColor3 = Color3.fromRGB(0, 120, 215); sliderKnob.Parent = sliderBar
+local knobCorner = Instance.new("UICorner"); knobCorner.CornerRadius = UDim.new(1,0); knobCorner.Parent = sliderKnob
+local sliderValueLabel = Instance.new("TextLabel"); sliderValueLabel.Size = UDim2.new(0, 50, 1, 0); sliderValueLabel.Position = UDim2.new(-1, 0, -1, 0); sliderValueLabel.BackgroundTransparency = 1; sliderValueLabel.Text = "0%"; sliderValueLabel.TextColor3 = Color3.fromRGB(200, 200, 200); sliderValueLabel.Font = Enum.Font.GothamBold; sliderValueLabel.TextSize = 12; sliderValueLabel.Parent = sliderKnob
+
+local function applyTransparency(val)
+	savedTransparency = val
+	for _, obj in pairs(transparencyObjects) do TweenService:Create(obj, TweenInfo.new(0.1), {BackgroundTransparency = val}):Play() end
+	if sliderFunction then sliderFunction(val) end
+end
+local dragging = false
+local function updateSlider(inputPosition)
+	local barPos = sliderBar.AbsolutePosition; local barSize = sliderBar.AbsoluteSize; local relativeX = math.clamp((inputPosition.X - barPos.X) / barSize.X, 0, 1)
+	sliderKnob.Position = UDim2.new(relativeX, 0, 0.5, 0); sliderValueLabel.Text = math.floor(relativeX * 100) .. "%"; applyTransparency(relativeX) 
+end
+sliderKnob.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true end end)
+UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
+UserInputService.InputChanged:Connect(function(input) if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then updateSlider(input.Position) end end)
+sliderFunction = function(valOverride) local val = valOverride or savedTransparency; sliderKnob.Position = UDim2.new(val, 0, 0.5, 0); sliderValueLabel.Text = math.floor(val * 100) .. "%" end
+
+-- UNLOAD
+createSettingLabel(" ")
+local unloadBtn = Instance.new("TextButton"); unloadBtn.Size = UDim2.new(0.96, 0, 0, 45); unloadBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50); unloadBtn.Text = "UNLOAD"; unloadBtn.TextColor3 = Color3.new(1,1,1); unloadBtn.Font = Enum.Font.GothamBlack; unloadBtn.Parent = pageSettings; local uc = Instance.new("UICorner"); uc.CornerRadius = UDim.new(0,8); uc.Parent = unloadBtn
+table.insert(transparencyObjects, unloadBtn)
+unloadBtn.MouseButton1Click:Connect(function() screenGui:Destroy(); script:Destroy() end)
+
+-- BUTTONS
 createSidebarButton("Local", "Local", 1)
 createSidebarButton("Visuals", "Visuals", 2)
 createSidebarButton("Combat", "Combat", 3)
 createSidebarButton("Teleport", "Teleport", 4)
 createSidebarButton("Settings", "Settings", 99)
 
--- (Settings Close/Unload sama seperti sebelumnya, dipersingkat)
-local unloadBtn = Instance.new("TextButton"); unloadBtn.Size = UDim2.new(0.96, 0, 0, 40); unloadBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40); unloadBtn.Text = "UNLOAD"; unloadBtn.TextColor3 = Color3.new(1,1,1); unloadBtn.Parent = pageSettings; local uc = Instance.new("UICorner"); uc.CornerRadius = UDim.new(0,8); uc.Parent = unloadBtn
-unloadBtn.MouseButton1Click:Connect(function() screenGui:Destroy(); script:Destroy() end)
-
--- Toggle Menu Logic
+-- TOGGLE
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Name = "ToggleDashboard"
 toggleBtn.Size = UDim2.new(0, 130, 0, 40)
@@ -437,6 +386,7 @@ local function toggleGui()
 	if toggled then
 		mainFrame.Position = UDim2.new(0.5, 0, 0.55, 0)
 		TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 0, 0.5, 0)}):Play()
+		applyTransparency(savedTransparency)
 	end
 end
 toggleBtn.MouseButton1Click:Connect(toggleGui)
