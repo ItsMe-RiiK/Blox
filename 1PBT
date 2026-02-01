@@ -616,7 +616,7 @@ local function IsInSafezone(safezonePos)
 	if not safezonePos then return false end
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if root then
-		return (root.Position - safezonePos).Magnitude <= 15 
+		return (root.Position - safezonePos).Magnitude <= 15
 	end
 	return false
 end
@@ -625,43 +625,34 @@ local function SmartTeleport(destination)
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart")
 	local hum = char and char:FindFirstChild("Humanoid")
-
 	if not root or not hum or hum.Health <= 0 then return end
-
 	local mySafezone = GetMySafezone()
 	local t0 = tick()
-
-	-- 1. LOGIKA TRANSIT (Jika di luar safezone)
 	if mySafezone and not IsInSafezone(mySafezone) then
-		-- Pindah ke Safezone
-		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 0.5, 0))
-
-		-- [RAHASIA SCRIPT BACKUP]: Loop 'Wait' Sampai Terdeteksi
-		-- Kita tidak menunggu detik, kita menunggu konfirmasi posisi.
+		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 0, 0))
 		local waitStart = tick()
 		while not IsInSafezone(mySafezone) and (tick() - waitStart < 1) do
-			task.wait(0.03) -- Cek secepat mungkin setiap frame
+			task.wait(0.03)
 		end
-		
-		-- Update waktu terakhir masuk safezone
-		t0 = tick() 
+		t0 = tick()
 	end
-
-	-- 2. LOGIKA TELEPORT TUJUAN (Grace Period)
-	-- Cek: Apakah sekarang di safezone? ATAU apakah baru saja (kurang dari 0.1s) dari safezone?
-	if IsInSafezone(mySafezone) or (tick() - t0 <= 0.03) then
-		
-		-- Reset Momentum (Penting)
+	if IsInSafezone(mySafezone) or (tick() - t0 <= 0.1) then
+		local targetCF = CFrame.new(destination + Vector3.new(0, 0, 0))
+		root.CFrame = targetCF
 		root.AssemblyLinearVelocity = Vector3.zero
 		root.AssemblyAngularVelocity = Vector3.zero
-		
-		-- Pindah ke Tujuan Akhir
-		root.CFrame = CFrame.new(destination + Vector3.new(0, 0, 0))
-		
-		-- [RAHASIA ANTI-ROLLBACK]: Paksa status 'Running'
-		-- Ini mencegah server mengira kamu jatuh/fling dan menarikmu kembali.
 		hum:ChangeState(Enum.HumanoidStateType.Running)
-		
+		local lockDuration = 0.2 
+		local lockStart = tick()
+		local connection
+		connection = RunService.Stepped:Connect(function()
+			if not char or not root or (tick() - lockStart > lockDuration) then
+				if connection then connection:Disconnect() end
+				return
+			end
+			root.CFrame = targetCF
+			root.AssemblyLinearVelocity = Vector3.zero
+		end)
 	else
 		root.CFrame = CFrame.new(destination + Vector3.new(0, 0, 0))
 	end
