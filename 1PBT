@@ -649,7 +649,7 @@ local function SmartTeleport(destination)
 
 	-- 2. LOGIKA TELEPORT TUJUAN (Grace Period)
 	-- Cek: Apakah sekarang di safezone? ATAU apakah baru saja (kurang dari 0.1s) dari safezone?
-	if IsInSafezone(mySafezone) or (tick() - t0 <= 0.1) then
+	if IsInSafezone(mySafezone) or (tick() - t0 <= 0.03) then
 		
 		-- Reset Momentum (Penting)
 		root.AssemblyLinearVelocity = Vector3.zero
