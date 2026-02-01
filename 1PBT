@@ -635,7 +635,7 @@ local function SmartTeleport(destination)
 
 	if mySafezone and not IsInSafezone(mySafezone) then
 		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 3, 0))
-		task.wait(1) 
+		task.wait(0.03) 
 		if hum.Health <= 0 then return end
 		root.AssemblyLinearVelocity = Vector3.zero
 		root.AssemblyAngularVelocity = Vector3.zero
