@@ -630,39 +630,51 @@ local function SmartTeleport(destination)
 
 	local mySafezone = GetMySafezone()
 
-	-- 1. Matikan Momentum Awal
-	-- Ini penting supaya kalau kamu lari, pas teleport nggak "tergelincir"
+	-- 1. Matikan Momentum
 	root.AssemblyLinearVelocity = Vector3.zero 
 	root.AssemblyAngularVelocity = Vector3.zero
 
-	-- 2. Logika Hijack: Sentuh Safezone -> Langsung Belok ke Tujuan
-	-- Kita hanya melakukan ini jika kita BELUM di safezone (artinya kita di medan perang)
+	-- 2. Logika Transit (Hijack)
 	if mySafezone and not IsInSafezone(mySafezone) then
-		
-		-- STEP A: Teleport ke "Pintu" Safezone
-		-- Kita tambah Y+3 agar tidak nyangkut di tanah
+		-- A. Pindah ke Safezone (Trigger Server)
 		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 3, 0))
-
-		-- STEP B: "The Hijack" (Jeda 1 Frame Fisika)
-		-- Kita butuh server "melihat" kita menyentuh area safezone.
-		-- RunService.Heartbeat:Wait() menunggu tepat 1 tick fisika server.
-		-- Ini JAUH lebih cepat dari task.wait() dan hampir tidak terlihat mata.
-		RunService.Heartbeat:Wait()
 		
-		-- STEP C: Cegah Game Mengirim Kita ke Spawn Asli
-		-- Kadang safezone game punya script yang melempar player. Kita nol-kan velocity lagi.
-		root.AssemblyLinearVelocity = Vector3.zero
-		root.AssemblyAngularVelocity = Vector3.zero
+		-- B. Tunggu 1 Frame Fisika (Wajib agar server 'touch' event jalan)
+		RunService.Heartbeat:Wait()
 	end
 
-	-- 3. Teleport Final ke Tujuan Pilihanmu
+	-- 3. Pindah ke Tujuan + KUNCI POSISI (SOLUSI MASALAH KAMU)
 	if hum.Health > 0 then
-		-- Langsung pindah ke tujuan yang kamu klik di menu
-		root.CFrame = CFrame.new(destination + Vector3.new(0, 3.5, 0))
+		local targetCFrame = CFrame.new(destination + Vector3.new(0, 3.5, 0))
 		
-		-- Kunci posisi sebentar (Anchor) agar tidak ditarik balik oleh server (Optional, tapi aman)
-		-- Kita matikan velocity sekali lagi untuk memastikan mendarat mulus
+		-- Pindahkan sekali
+		root.CFrame = targetCFrame
 		root.AssemblyLinearVelocity = Vector3.zero
+		
+		-- [SOLUSI UTAMA]: Force Hold / Position Lock
+		-- Kita buat loop cepat selama 0.6 detik.
+		-- Jika server mencoba menarik kamu balik ke spawn safezone dalam rentang waktu ini,
+		-- loop ini akan langsung mengembalikan kamu ke tujuan pilihanmu (Override Server).
+		
+		local startTime = tick()
+		local connection
+		
+		connection = RunService.Stepped:Connect(function()
+			-- Jika karakter mati atau waktu habis, hentikan kunci
+			if not char or not root or (tick() - startTime > 0.6) then
+				if connection then connection:Disconnect() end
+				return
+			end
+			
+			-- Paksa posisi tetap di tujuan (Lawan Server)
+			root.CFrame = targetCFrame
+			root.AssemblyLinearVelocity = Vector3.zero -- Supaya gak getar
+		end)
+		
+		-- Cleanup connection jika karakter mati mendadak
+		hum.Died:Connect(function()
+			if connection then connection:Disconnect() end
+		end)
 	end
 end
 
