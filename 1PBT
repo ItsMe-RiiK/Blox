@@ -17,10 +17,10 @@ local CONTENT_WIDTH = 1 - SIDEBAR_WIDTH
 
 local TeleportData = {
 	SafeZones = {
-		Vector3.new(-428, 42, 9),
-		Vector3.new(-428, 42, -190),
-		Vector3.new(-314, 41, -480),
-		Vector3.new(-115, 41, -481)
+		["Red"] = Vector3.new(-428, 42, 9),
+		["Green"] = Vector3.new(-428, 42, -190),
+		["Blue"] = Vector3.new(-314, 41, -480),
+		["Yellow"] = Vector3.new(-115, 41, -481)
 	},
 	Flags = {
 		{Name = "Hill Flag", Pos = Vector3.new(-27, 101, -79)}
@@ -606,12 +606,8 @@ Toggles.Bring = {Enabled = false, Func = toggleBring}
 
 local function GetMySafezone()
 	local teamName = player.Team and player.Team.Name
-	if not teamName then return nil end
-	
-	for _, data in pairs(TeleportData.Locations) do
-		if data.Name == (teamName .. " Spawn") then
-			return data.Pos
-		end
+	if teamName and TeleportData.SafeZones[teamName] then
+		return TeleportData.SafeZones[teamName]
 	end
 	return nil
 end
@@ -620,7 +616,7 @@ local function IsInSafezone(safezonePos)
 	if not safezonePos then return false end
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if root then
-		return (root.Position - safezonePos).Magnitude <= 20
+		return (root.Position - safezonePos).Magnitude <= 20 
 	end
 	return false
 end
@@ -639,15 +635,11 @@ local function SmartTeleport(destination)
 
 	if mySafezone and not IsInSafezone(mySafezone) then
 		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 3, 0))
-		
-		task.wait(0.03) 
-
+		task.wait(1) 
 		if hum.Health <= 0 then return end
-		
 		root.AssemblyLinearVelocity = Vector3.zero
 		root.AssemblyAngularVelocity = Vector3.zero
 	end
-
 	root.CFrame = CFrame.new(destination + Vector3.new(0, 3.5, 0))
 end
 
