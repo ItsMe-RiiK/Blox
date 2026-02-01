@@ -642,7 +642,7 @@ local function SmartTeleport(destination)
 		root.AssemblyLinearVelocity = Vector3.zero
 		root.AssemblyAngularVelocity = Vector3.zero
 		hum:ChangeState(Enum.HumanoidStateType.Running)
-		local lockDuration = 0.4
+		local lockDuration = 1
 		local lockStart = tick()
 		local connection
 		connection = RunService.Stepped:Connect(function()
