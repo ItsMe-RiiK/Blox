@@ -616,7 +616,7 @@ local function IsInSafezone(safezonePos)
 	if not safezonePos then return false end
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if root then
-		return (root.Position - safezonePos).Magnitude <= 20
+		return (root.Position - safezonePos).Magnitude <= 30
 	end
 	return false
 end
@@ -628,22 +628,32 @@ local function SmartTeleport(destination)
 
 	if not root or not hum or hum.Health <= 0 then return end
 
+	-- 1. Reset Fisika Total (Kunci agar mulus)
 	root.AssemblyLinearVelocity = Vector3.zero
 	root.AssemblyAngularVelocity = Vector3.zero
 
 	local mySafezone = GetMySafezone()
 
+	-- 2. Transit Kilat
+	-- Jika punya Safezone DAN kita sedang di luar (medan perang)
 	if mySafezone and not IsInSafezone(mySafezone) then
-		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 0.02, 0))
-		local startTime = tick()
-		repeat
-			task.wait()
-		until IsInSafezone(MySafezone) or (tick() - startTime > 1)
+		
+		-- Pindahkan posisi ke Safezone
+		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 3, 0))
+		
+		-- [KUNCI KECEPATAN]:
+		-- Jangan pakai loop "repeat wait". 
+		-- Cukup tunggu 1 detak jantung fisika (Heartbeat) agar server meregistrasi posisi safezone.
+		-- Ini terjadi dalam sepersekian detik (tidak kasat mata).
+		RunService.Heartbeat:Wait() 
+		
+		-- Reset velocity lagi jaga-jaga ada momentum sisa
 		root.AssemblyLinearVelocity = Vector3.zero
-		root.AssemblyAngularVelocity = Vector3.zero
 	end
-    if hum.Health > 0 then
-		root.CFrame = CFrame.new(destination + Vector3.new(0, 0.05, 0))
+
+	-- 3. Langsung Teleport ke Tujuan
+	if hum.Health > 0 then
+		root.CFrame = CFrame.new(destination + Vector3.new(0, 3.5, 0))
 	end
 end
 
