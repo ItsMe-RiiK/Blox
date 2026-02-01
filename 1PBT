@@ -637,7 +637,7 @@ local function SmartTeleport(destination)
 	-- 2. Logika Transit (Hijack)
 	if mySafezone and not IsInSafezone(mySafezone) then
 		-- A. Pindah ke Safezone (Trigger Server)
-		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 3, 0))
+		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 0, 0))
 		
 		-- B. Tunggu 1 Frame Fisika (Wajib agar server 'touch' event jalan)
 		RunService.Heartbeat:Wait()
@@ -645,7 +645,7 @@ local function SmartTeleport(destination)
 
 	-- 3. Pindah ke Tujuan + KUNCI POSISI (SOLUSI MASALAH KAMU)
 	if hum.Health > 0 then
-		local targetCFrame = CFrame.new(destination + Vector3.new(0, 3.5, 0))
+		local targetCFrame = CFrame.new(destination + Vector3.new(0, 0, 0))
 		
 		-- Pindahkan sekali
 		root.CFrame = targetCFrame
@@ -661,7 +661,7 @@ local function SmartTeleport(destination)
 		
 		connection = RunService.Stepped:Connect(function()
 			-- Jika karakter mati atau waktu habis, hentikan kunci
-			if not char or not root or (tick() - startTime > 0.6) then
+			if not char or not root or (tick() - startTime > 0.2) then
 				if connection then connection:Disconnect() end
 				return
 			end
