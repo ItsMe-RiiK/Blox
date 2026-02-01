@@ -616,7 +616,7 @@ local function IsInSafezone(safezonePos)
 	if not safezonePos then return false end
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if root then
-		return (root.Position - safezonePos).Magnitude <= 30
+		return (root.Position - safezonePos).Magnitude <= 15 
 	end
 	return false
 end
@@ -629,52 +629,41 @@ local function SmartTeleport(destination)
 	if not root or not hum or hum.Health <= 0 then return end
 
 	local mySafezone = GetMySafezone()
+	local t0 = tick()
 
-	-- 1. Matikan Momentum
-	root.AssemblyLinearVelocity = Vector3.zero 
-	root.AssemblyAngularVelocity = Vector3.zero
-
-	-- 2. Logika Transit (Hijack)
+	-- 1. LOGIKA TRANSIT (Jika di luar safezone)
 	if mySafezone and not IsInSafezone(mySafezone) then
-		-- A. Pindah ke Safezone (Trigger Server)
-		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 0, 0))
+		-- Pindah ke Safezone
+		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 0.5, 0))
+
+		-- [RAHASIA SCRIPT BACKUP]: Loop 'Wait' Sampai Terdeteksi
+		-- Kita tidak menunggu detik, kita menunggu konfirmasi posisi.
+		local waitStart = tick()
+		while not IsInSafezone(mySafezone) and (tick() - waitStart < 1) do
+			task.wait() -- Cek secepat mungkin setiap frame
+		end
 		
-		-- B. Tunggu 1 Frame Fisika (Wajib agar server 'touch' event jalan)
-		RunService.Heartbeat:Wait()
+		-- Update waktu terakhir masuk safezone
+		t0 = tick() 
 	end
 
-	-- 3. Pindah ke Tujuan + KUNCI POSISI (SOLUSI MASALAH KAMU)
-	if hum.Health > 0 then
-		local targetCFrame = CFrame.new(destination + Vector3.new(0, 0, 0))
+	-- 2. LOGIKA TELEPORT TUJUAN (Grace Period)
+	-- Cek: Apakah sekarang di safezone? ATAU apakah baru saja (kurang dari 0.1s) dari safezone?
+	if IsInSafezone(mySafezone) or (tick() - t0 <= 0.1) then
 		
-		-- Pindahkan sekali
-		root.CFrame = targetCFrame
+		-- Reset Momentum (Penting)
 		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
 		
-		-- [SOLUSI UTAMA]: Force Hold / Position Lock
-		-- Kita buat loop cepat selama 0.6 detik.
-		-- Jika server mencoba menarik kamu balik ke spawn safezone dalam rentang waktu ini,
-		-- loop ini akan langsung mengembalikan kamu ke tujuan pilihanmu (Override Server).
+		-- Pindah ke Tujuan Akhir
+		root.CFrame = CFrame.new(destination + Vector3.new(0, 0, 0))
 		
-		local startTime = tick()
-		local connection
+		-- [RAHASIA ANTI-ROLLBACK]: Paksa status 'Running'
+		-- Ini mencegah server mengira kamu jatuh/fling dan menarikmu kembali.
+		hum:ChangeState(Enum.HumanoidStateType.Running)
 		
-		connection = RunService.Stepped:Connect(function()
-			-- Jika karakter mati atau waktu habis, hentikan kunci
-			if not char or not root or (tick() - startTime > 0.03) then
-				if connection then connection:Disconnect() end
-				return
-			end
-			
-			-- Paksa posisi tetap di tujuan (Lawan Server)
-			root.CFrame = targetCFrame
-			root.AssemblyLinearVelocity = Vector3.zero -- Supaya gak getar
-		end)
-		
-		-- Cleanup connection jika karakter mati mendadak
-		hum.Died:Connect(function()
-			if connection then connection:Disconnect() end
-		end)
+	else
+		root.CFrame = CFrame.new(destination + Vector3.new(0, 0, 0))
 	end
 end
 
