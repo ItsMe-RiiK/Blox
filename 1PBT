@@ -368,7 +368,7 @@ end)
 
 local EspCache = {}
 local EspConnection = nil
-local espEnabled = false -- Default state
+local espEnabled = false
 
 local SETTINGS = {
 	TeamCheck = true,
@@ -378,7 +378,6 @@ local SETTINGS = {
 	TextSize = 14
 }
 
---// Fungsi bantu untuk mendapatkan warna (Diambil dari logika Kode 1 untuk efisiensi)
 local function GetESPColor(p)
 	if SETTINGS.TeamCheck and p.Team and player.Team and p.Team == player.Team then
 		return SETTINGS.TeamColor
@@ -389,7 +388,6 @@ end
 
 local function RemoveESP(p)
 	if EspCache[p] then
-		-- Gunakan pcall agar tidak error jika object sudah hilang duluan
 		pcall(function()
 			if EspCache[p].Highlight then EspCache[p].Highlight:Destroy() end
 			if EspCache[p].Billboard then EspCache[p].Billboard:Destroy() end
@@ -403,7 +401,7 @@ end
 
 local function CreateESP(p)
 	if p == player then return end
-	RemoveESP(p) -- Bersihkan data lama jika ada
+	RemoveESP(p)
 
 	local data = {
 		player = p,
@@ -416,7 +414,6 @@ local function CreateESP(p)
 		local hum = char:WaitForChild("Humanoid", 10)
 		if not hrp or not hum then return end
 
-		-- 1. Setup Visual (Highlight & Billboard)
 		local hl = Instance.new("Highlight")
 		hl.FillTransparency = 1
 		hl.OutlineTransparency = 0
@@ -444,7 +441,6 @@ local function CreateESP(p)
 		txt.TextStrokeColor3 = Color3.new(0, 0, 0)
 		txt.Parent = bg
 
-		-- Simpan referensi object ke cache
 		data.Highlight = hl
 		data.Billboard = bg
 		data.Text = txt
@@ -452,13 +448,11 @@ local function CreateESP(p)
 		data.Hrp = hrp
 		data.Humanoid = hum
 
-		-- 2. Update Warna Awal
 		local color = GetESPColor(p)
 		hl.FillColor = color
 		hl.OutlineColor = color
 		txt.TextColor3 = color
 
-		-- 3. Event Listener untuk perubahan TIM (Optimasi: Tidak dicek di loop)
 		table.insert(data.Connections, p:GetPropertyChangedSignal("Team"):Connect(function()
 			local newColor = GetESPColor(p)
 			if hl.Parent then
@@ -475,7 +469,6 @@ local function CreateESP(p)
 	table.insert(data.Connections, p.CharacterAdded:Connect(CharacterAdded))
 end
 
---// Loop Utama (Hanya menangani Jarak & Teks)
 local function UpdateLoop()
 	local myChar = player.Character
 	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -483,55 +476,44 @@ local function UpdateLoop()
 
 	for p, data in pairs(EspCache) do
 		if data.Character and data.Hrp and data.Humanoid and data.Humanoid.Health > 0 then
-			-- Hitung Jarak
 			local dist = (myPos - data.Hrp.Position).Magnitude
 
 			if dist <= SETTINGS.MaxDistance then
-				-- Aktifkan visual jika belum aktif
 				if not data.Highlight.Enabled then
 					data.Highlight.Enabled = true
 					data.Billboard.Enabled = true
 				end
 
-				-- Update Teks (Nama, HP, Jarak)
-				-- Kita format string di sini karena Jarak (dist) berubah setiap saat
 				data.Text.Text = string.format("%s\n[HP: %d] [%d m]", 
 					p.DisplayName, 
 					math.floor(data.Humanoid.Health), 
 					math.floor(dist)
 				)
 			else
-				-- Sembunyikan jika di luar jarak
 				data.Highlight.Enabled = false
 				data.Billboard.Enabled = false
 			end
 		else
-			-- Sembunyikan jika karakter mati/tidak valid
 			if data.Highlight then data.Highlight.Enabled = false end
 			if data.Billboard then data.Billboard.Enabled = false end
 		end
 	end
 end
 
---// Integrasi Toggle Button (Sesuai Kode 2)
 local btnESP, toggleESP = createToggle(pageVisuals, "ESP (F1)", false, function(state)
 	espEnabled = state
 
 	if state then
-		-- Aktifkan Loop
 		if EspConnection then EspConnection:Disconnect() end
 		EspConnection = RunService.RenderStepped:Connect(UpdateLoop)
 		
-		-- Paksa semua ESP muncul
 		for _, data in pairs(EspCache) do
 			if data.Highlight then data.Highlight.Enabled = true end
 			if data.Billboard then data.Billboard.Enabled = true end
 		end
 	else
-		-- Matikan Loop
 		if EspConnection then EspConnection:Disconnect() end
 		
-		-- Sembunyikan semua ESP
 		for _, data in pairs(EspCache) do
 			if data.Highlight then data.Highlight.Enabled = false end
 			if data.Billboard then data.Billboard.Enabled = false end
@@ -541,7 +523,6 @@ end)
 
 Toggles.ESP = {Enabled = false, Func = toggleESP}
 
---// Inisialisasi Player yang sudah ada
 for _, v in ipairs(Players:GetPlayers()) do 
 	if v ~= player then CreateESP(v) end 
 end
@@ -625,19 +606,21 @@ Toggles.Bring = {Enabled = false, Func = toggleBring}
 
 local function GetMySafezone()
 	local teamName = player.Team and player.Team.Name
-	-- Pastikan TELEPORT_COORDS memiliki data untuk tim pemain saat ini
-	if teamName and TELEPORT_COORDS[teamName] and TELEPORT_COORDS[teamName].Safezone then
-		return TELEPORT_COORDS[teamName].Safezone
+	if not teamName then return nil end
+	
+	for _, data in pairs(TeleportData.Locations) do
+		if data.Name == (teamName .. " Spawn") then
+			return data.Pos
+		end
 	end
 	return nil
 end
 
--- Fungsi bantu: Cek apakah pemain sudah berada di dalam Safezone sendiri
 local function IsInSafezone(safezonePos)
 	if not safezonePos then return false end
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if root then
-		return (root.Position - safezonePos).Magnitude <= 15 -- Radius 15 stud (sesuaikan kebutuhan)
+		return (root.Position - safezonePos).Magnitude <= 20
 	end
 	return false
 end
@@ -649,34 +632,25 @@ local function SmartTeleport(destination)
 
 	if not root or not hum or hum.Health <= 0 then return end
 
-	-- 1. Reset Fisika (Anti-Fling/Mental)
-	-- Ini wajib agar saat teleport velocity pemain jadi 0 (tidak meluncur)
 	root.AssemblyLinearVelocity = Vector3.zero
 	root.AssemblyAngularVelocity = Vector3.zero
 
 	local mySafezone = GetMySafezone()
 
-	-- 2. Logika Transit (Diambil dari keunggulan Kode 1)
-	-- Jika punya safezone DAN posisi sekarang di luar safezone (sedang perang), paksa transit.
 	if mySafezone and not IsInSafezone(mySafezone) then
-		-- Pindah ke Safezone Tim Sendiri dulu
 		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 3, 0))
 		
-		-- Tunggu sebentar (Cooldown/Penalty)
 		task.wait(1) 
 
-		-- Cek lagi apakah masih hidup setelah menunggu
 		if hum.Health <= 0 then return end
 		
-		-- Reset fisika lagi sebelum loncat ke tujuan akhir
 		root.AssemblyLinearVelocity = Vector3.zero
 		root.AssemblyAngularVelocity = Vector3.zero
 	end
 
-	-- 3. Teleport ke Tujuan Akhir
-	-- Ditambah Y + 3.5 supaya kaki tidak nyangkut di lantai
 	root.CFrame = CFrame.new(destination + Vector3.new(0, 3.5, 0))
 end
+
 local flagLabel = Instance.new("TextLabel")
 flagLabel.Size = UDim2.new(1,0,0,25) 
 flagLabel.Text = "Neutral Area" 
@@ -692,8 +666,10 @@ for _, data in pairs(TeleportData.Flags) do
 	btn.Text = data.Name 
 	btn.TextColor3 = Color3.new(1,1,1) 
 	btn.Font = Enum.Font.GothamBlack 
-	btn.Parent = pageTeleport Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6) 
+	btn.Parent = pageTeleport 
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6) 
 	table.insert(transparencyObjects, btn)
+	
 	btn.MouseButton1Click:Connect(function() SmartTeleport(data.Pos) end)
 end
 
@@ -708,7 +684,8 @@ selectorLabel.Parent=pageTeleport
 local navContainer = Instance.new("Frame") 
 navContainer.Size = UDim2.new(0.96,0,0,45) 
 navContainer.BackgroundColor3 = Color3.fromRGB(40,40,45) 
-navContainer.Parent = pageTeleport Instance.new("UICorner", navContainer).CornerRadius = UDim.new(0,8) 
+navContainer.Parent = pageTeleport 
+Instance.new("UICorner", navContainer).CornerRadius = UDim.new(0,8) 
 table.insert(transparencyObjects, navContainer)
 
 local prevBtn = Instance.new("TextButton") 
@@ -727,7 +704,8 @@ nextBtn.Text = ">"
 nextBtn.Font = Enum.Font.GothamBold 
 nextBtn.TextColor3 = Color3.fromRGB(200,200,200) 
 nextBtn.BackgroundColor3 = Color3.fromRGB(50,50,60) 
-nextBtn.Parent = navContainer Instance.new("UICorner", nextBtn).CornerRadius = UDim.new(0,8)
+nextBtn.Parent = navContainer 
+Instance.new("UICorner", nextBtn).CornerRadius = UDim.new(0,8)
 
 local currentTeamLabel = Instance.new("TextLabel") 
 currentTeamLabel.Size = UDim2.new(1,-90,1,0) 
@@ -751,7 +729,11 @@ dynamicLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 local function UpdateTeamDisplay()
 	local teamName = TeamColors[currentTeamIndex]
 	currentTeamLabel.Text = "TEAM: " .. string.upper(teamName)
-	for _, v in pairs(dynamicContainer:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+	
+	for _, v in pairs(dynamicContainer:GetChildren()) do 
+		if v:IsA("TextButton") then v:Destroy() end 
+	end
+	
 	for _, data in pairs(TeleportData.Locations) do
 		if string.find(data.Name, teamName) then
 			local btn = Instance.new("TextButton") 
@@ -769,12 +751,15 @@ local function UpdateTeamDisplay()
 		end
 	end
 end
-prevBtn.MouseButton1Click:Connect(function() currentTeamIndex -= 1 
+prevBtn.MouseButton1Click:Connect(function() 
+	currentTeamIndex -= 1 
 	if currentTeamIndex < 1 then 
 		currentTeamIndex = #TeamColors end 
 	UpdateTeamDisplay() 
 end)
-nextBtn.MouseButton1Click:Connect(function() currentTeamIndex += 1 
+
+nextBtn.MouseButton1Click:Connect(function() 
+	currentTeamIndex += 1 
 	if currentTeamIndex > #TeamColors then 
 		currentTeamIndex = 1 end
 	UpdateTeamDisplay() 
