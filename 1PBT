@@ -640,7 +640,7 @@ local function SmartTeleport(destination)
 		-- Kita tidak menunggu detik, kita menunggu konfirmasi posisi.
 		local waitStart = tick()
 		while not IsInSafezone(mySafezone) and (tick() - waitStart < 1) do
-			task.wait() -- Cek secepat mungkin setiap frame
+			task.wait(0.03) -- Cek secepat mungkin setiap frame
 		end
 		
 		-- Update waktu terakhir masuk safezone
