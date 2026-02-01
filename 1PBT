@@ -4,6 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Camera = workspace.CurrentCamera
+local TeleportService = game:GetService("TeleportService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -622,24 +623,60 @@ local btnBring, toggleBring = createToggle(pageCombat, "Bring Enemy (B)", false,
 end)
 Toggles.Bring = {Enabled = false, Func = toggleBring}
 
-local function IsSafeZoneValid(pos)
-	local result = workspace:Raycast(pos + Vector3.new(0,5,0), Vector3.new(0,-20,0), RaycastParams.new())
-	return result ~= nil
+local function GetMySafezone()
+	local teamName = player.Team and player.Team.Name
+	-- Pastikan TELEPORT_COORDS memiliki data untuk tim pemain saat ini
+	if teamName and TELEPORT_COORDS[teamName] and TELEPORT_COORDS[teamName].Safezone then
+		return TELEPORT_COORDS[teamName].Safezone
+	end
+	return nil
+end
+
+-- Fungsi bantu: Cek apakah pemain sudah berada di dalam Safezone sendiri
+local function IsInSafezone(safezonePos)
+	if not safezonePos then return false end
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if root then
+		return (root.Position - safezonePos).Magnitude <= 15 -- Radius 15 stud (sesuaikan kebutuhan)
+	end
+	return false
 end
 
 local function SmartTeleport(destination)
-	if not player.Character then return end
-	local transitZone = nil
-	for _, sz in pairs(TeleportData.SafeZones) do
-		if IsSafeZoneValid(sz) then transitZone = sz break end
-	end
-	if transitZone then
-		player.Character.HumanoidRootPart.CFrame = CFrame.new(transitZone + Vector3.new(0,3,0))
-		task.wait(0.25)
-	end
-	player.Character.HumanoidRootPart.CFrame = CFrame.new(destination + Vector3.new(0,3,0))
-end
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChild("Humanoid")
 
+	if not root or not hum or hum.Health <= 0 then return end
+
+	-- 1. Reset Fisika (Anti-Fling/Mental)
+	-- Ini wajib agar saat teleport velocity pemain jadi 0 (tidak meluncur)
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+
+	local mySafezone = GetMySafezone()
+
+	-- 2. Logika Transit (Diambil dari keunggulan Kode 1)
+	-- Jika punya safezone DAN posisi sekarang di luar safezone (sedang perang), paksa transit.
+	if mySafezone and not IsInSafezone(mySafezone) then
+		-- Pindah ke Safezone Tim Sendiri dulu
+		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 3, 0))
+		
+		-- Tunggu sebentar (Cooldown/Penalty)
+		task.wait(1) 
+
+		-- Cek lagi apakah masih hidup setelah menunggu
+		if hum.Health <= 0 then return end
+		
+		-- Reset fisika lagi sebelum loncat ke tujuan akhir
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
+	end
+
+	-- 3. Teleport ke Tujuan Akhir
+	-- Ditambah Y + 3.5 supaya kaki tidak nyangkut di lantai
+	root.CFrame = CFrame.new(destination + Vector3.new(0, 3.5, 0))
+end
 local flagLabel = Instance.new("TextLabel")
 flagLabel.Size = UDim2.new(1,0,0,25) 
 flagLabel.Text = "Neutral Area" 
