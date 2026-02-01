@@ -628,32 +628,41 @@ local function SmartTeleport(destination)
 
 	if not root or not hum or hum.Health <= 0 then return end
 
-	-- 1. Reset Fisika Total (Kunci agar mulus)
-	root.AssemblyLinearVelocity = Vector3.zero
-	root.AssemblyAngularVelocity = Vector3.zero
-
 	local mySafezone = GetMySafezone()
 
-	-- 2. Transit Kilat
-	-- Jika punya Safezone DAN kita sedang di luar (medan perang)
+	-- 1. Matikan Momentum Awal
+	-- Ini penting supaya kalau kamu lari, pas teleport nggak "tergelincir"
+	root.AssemblyLinearVelocity = Vector3.zero 
+	root.AssemblyAngularVelocity = Vector3.zero
+
+	-- 2. Logika Hijack: Sentuh Safezone -> Langsung Belok ke Tujuan
+	-- Kita hanya melakukan ini jika kita BELUM di safezone (artinya kita di medan perang)
 	if mySafezone and not IsInSafezone(mySafezone) then
 		
-		-- Pindahkan posisi ke Safezone
+		-- STEP A: Teleport ke "Pintu" Safezone
+		-- Kita tambah Y+3 agar tidak nyangkut di tanah
 		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 3, 0))
+
+		-- STEP B: "The Hijack" (Jeda 1 Frame Fisika)
+		-- Kita butuh server "melihat" kita menyentuh area safezone.
+		-- RunService.Heartbeat:Wait() menunggu tepat 1 tick fisika server.
+		-- Ini JAUH lebih cepat dari task.wait() dan hampir tidak terlihat mata.
+		RunService.Heartbeat:Wait()
 		
-		-- [KUNCI KECEPATAN]:
-		-- Jangan pakai loop "repeat wait". 
-		-- Cukup tunggu 1 detak jantung fisika (Heartbeat) agar server meregistrasi posisi safezone.
-		-- Ini terjadi dalam sepersekian detik (tidak kasat mata).
-		RunService.Heartbeat:Wait() 
-		
-		-- Reset velocity lagi jaga-jaga ada momentum sisa
+		-- STEP C: Cegah Game Mengirim Kita ke Spawn Asli
+		-- Kadang safezone game punya script yang melempar player. Kita nol-kan velocity lagi.
 		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
 	end
 
-	-- 3. Langsung Teleport ke Tujuan
+	-- 3. Teleport Final ke Tujuan Pilihanmu
 	if hum.Health > 0 then
+		-- Langsung pindah ke tujuan yang kamu klik di menu
 		root.CFrame = CFrame.new(destination + Vector3.new(0, 3.5, 0))
+		
+		-- Kunci posisi sebentar (Anchor) agar tidak ditarik balik oleh server (Optional, tapi aman)
+		-- Kita matikan velocity sekali lagi untuk memastikan mendarat mulus
+		root.AssemblyLinearVelocity = Vector3.zero
 	end
 end
 
