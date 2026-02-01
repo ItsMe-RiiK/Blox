@@ -379,7 +379,7 @@ local SETTINGS = {
 
 --// Fungsi bantu untuk mendapatkan warna (Diambil dari logika Kode 1 untuk efisiensi)
 local function GetESPColor(p)
-	if SETTINGS.TeamCheck and p.Team and LocalPlayer.Team and p.Team == LocalPlayer.Team then
+	if SETTINGS.TeamCheck and p.Team and player.Team and p.Team == player.Team then
 		return SETTINGS.TeamColor
 	else
 		return SETTINGS.EnemyColor
@@ -401,11 +401,11 @@ local function RemoveESP(p)
 end
 
 local function CreateESP(p)
-	if p == LocalPlayer then return end
+	if p == player then return end
 	RemoveESP(p) -- Bersihkan data lama jika ada
 
 	local data = {
-		Player = p,
+		player = p,
 		Connections = {}
 	}
 	EspCache[p] = data
@@ -455,7 +455,7 @@ local function CreateESP(p)
 		local color = GetESPColor(p)
 		hl.FillColor = color
 		hl.OutlineColor = color
-		txt.TextColor3 = color -- Opsional: teks mengikuti warna tim
+		txt.TextColor3 = color
 
 		-- 3. Event Listener untuk perubahan TIM (Optimasi: Tidak dicek di loop)
 		table.insert(data.Connections, p:GetPropertyChangedSignal("Team"):Connect(function()
@@ -476,8 +476,7 @@ end
 
 --// Loop Utama (Hanya menangani Jarak & Teks)
 local function UpdateLoop()
-	-- Ambil posisi LocalPlayer sekali saja per frame untuk perbandingan
-	local myChar = LocalPlayer.Character
+	local myChar = player.Character
 	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
 	local myPos = myRoot and myRoot.Position or Vector3.zero
 
@@ -543,7 +542,7 @@ Toggles.ESP = {Enabled = false, Func = toggleESP}
 
 --// Inisialisasi Player yang sudah ada
 for _, v in ipairs(Players:GetPlayers()) do 
-	if v ~= LocalPlayer then CreateESP(v) end 
+	if v ~= player then CreateESP(v) end 
 end
 Players.PlayerAdded:Connect(CreateESP)
 Players.PlayerRemoving:Connect(RemoveESP)
