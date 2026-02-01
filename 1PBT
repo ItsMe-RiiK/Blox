@@ -661,7 +661,7 @@ local function SmartTeleport(destination)
 		
 		connection = RunService.Stepped:Connect(function()
 			-- Jika karakter mati atau waktu habis, hentikan kunci
-			if not char or not root or (tick() - startTime > 0.2) then
+			if not char or not root or (tick() - startTime > 0.03) then
 				if connection then connection:Disconnect() end
 				return
 			end
