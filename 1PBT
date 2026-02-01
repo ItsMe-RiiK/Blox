@@ -616,7 +616,7 @@ local function IsInSafezone(safezonePos)
 	if not safezonePos then return false end
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if root then
-		return (root.Position - safezonePos).Magnitude <= 20 
+		return (root.Position - safezonePos).Magnitude <= 20
 	end
 	return false
 end
@@ -634,13 +634,17 @@ local function SmartTeleport(destination)
 	local mySafezone = GetMySafezone()
 
 	if mySafezone and not IsInSafezone(mySafezone) then
-		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 3, 0))
-		task.wait(0.03) 
-		if hum.Health <= 0 then return end
+		root.CFrame = CFrame.new(mySafezone + Vector3.new(0, 0.02, 0))
+		local startTime = tick()
+		repeat
+			task.wait()
+		until IsInSafezone(MySafezone) or (tick() - startTime > 1)
 		root.AssemblyLinearVelocity = Vector3.zero
 		root.AssemblyAngularVelocity = Vector3.zero
 	end
-	root.CFrame = CFrame.new(destination + Vector3.new(0, 3.5, 0))
+    if hum.Health > 0 then
+		root.CFrame = CFrame.new(destination + Vector3.new(0, 0.05, 0))
+	end
 end
 
 local flagLabel = Instance.new("TextLabel")
