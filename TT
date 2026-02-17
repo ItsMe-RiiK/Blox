@@ -1,0 +1,130 @@
+-- ==========================================
+-- GUI REQUEST TROLL
+-- ==========================================
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- 1. Membuat ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TrollGui"
+ScreenGui.ResetOnSpawn = false
+-- Jika dijalankan lewat executor, taruh di CoreGui agar tidak hilang saat mati
+local parent = (game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui"))
+ScreenGui.Parent = parent
+
+-- 2. Membuat Main Frame (Background)
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 300, 0, 180)
+MainFrame.Position = UDim2.new(0.5, -150, 0.5, -90)
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true -- Membuat GUI bisa digeser
+MainFrame.Parent = ScreenGui
+
+-- UI Corner agar sudutnya melengkung
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+-- 3. Membuat Judul
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundTransparency = 1
+Title.Text = "Troll Request Panel"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+Title.Parent = MainFrame
+
+-- 4. TextBox untuk Nama Player
+local PlayerInput = Instance.new("TextBox")
+PlayerInput.Size = UDim2.new(0.8, 0, 0, 35)
+PlayerInput.Position = UDim2.new(0.1, 0, 0, 45)
+PlayerInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+PlayerInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+PlayerInput.PlaceholderText = "Target Player (Bisa ketik sebagian)"
+PlayerInput.Font = Enum.Font.Gotham
+PlayerInput.TextSize = 14
+PlayerInput.Text = ""
+PlayerInput.Parent = MainFrame
+
+-- 5. TextBox untuk Action / Tindakan
+local ActionInput = Instance.new("TextBox")
+ActionInput.Size = UDim2.new(0.8, 0, 0, 35)
+ActionInput.Position = UDim2.new(0.1, 0, 0, 90)
+ActionInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+ActionInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+ActionInput.PlaceholderText = "Action (Contoh: Freeze, Kill)"
+ActionInput.Font = Enum.Font.Gotham
+ActionInput.TextSize = 14
+ActionInput.Text = "Freeze" -- Default text
+ActionInput.Parent = MainFrame
+
+-- 6. Tombol Execute
+local ExecuteBtn = Instance.new("TextButton")
+ExecuteBtn.Size = UDim2.new(0.8, 0, 0, 35)
+ExecuteBtn.Position = UDim2.new(0.1, 0, 0, 135)
+ExecuteBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+ExecuteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ExecuteBtn.Text = "FIRE REMOTE"
+ExecuteBtn.Font = Enum.Font.GothamBold
+ExecuteBtn.TextSize = 14
+ExecuteBtn.Parent = MainFrame
+
+-- ==========================================
+-- LOGIC & FUNGSI
+-- ==========================================
+
+-- Fungsi untuk mencari player dari singkatan nama
+local function GetPlayerFromString(str)
+	if not str or str == "" then return nil end
+	str = string.lower(str)
+	
+	for _, player in ipairs(Players:GetPlayers()) do
+		-- Cek kecocokan nama asli atau nama display
+		if string.lower(string.sub(player.Name, 1, #str)) == str or 
+		   string.lower(string.sub(player.DisplayName, 1, #str)) == str then
+			return player
+		end
+	end
+	return nil
+end
+
+-- Event ketika tombol ditekan
+ExecuteBtn.MouseButton1Click:Connect(function()
+	local targetStr = PlayerInput.Text
+	local actionStr = ActionInput.Text
+	
+	-- Cari object player
+	local targetPlayer = GetPlayerFromString(targetStr)
+	
+	if targetPlayer then
+		ExecuteBtn.Text = "Mengirim..."
+		
+		pcall(function()
+			-- Argument sesuai dengan format yang Anda berikan
+			local args = {
+				targetPlayer, -- Object Playernya (misal: RiiK26)
+				actionStr     -- String aksinya (misal: "Freeze")
+			}
+			
+			-- Fire Remote
+			ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("RequestTroll"):FireServer(unpack(args))
+		end)
+		
+		task.wait(0.5)
+		ExecuteBtn.Text = "SUCCESS (" .. targetPlayer.Name .. ")"
+		task.wait(1.5)
+		ExecuteBtn.Text = "FIRE REMOTE"
+	else
+		-- Jika player tidak ditemukan
+		ExecuteBtn.Text = "PLAYER TIDAK DITEMUKAN"
+		ExecuteBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+		task.wait(1.5)
+		ExecuteBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+		ExecuteBtn.Text = "FIRE REMOTE"
+	end
+end)
