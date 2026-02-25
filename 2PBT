@@ -140,7 +140,7 @@ local App = {
 		AutoE = Enum.KeyCode.F2,
 		WalkSpeed = Enum.KeyCode.F3,
 		AuraKill = Enum.KeyCode.K,
-		Bring = Enum.KeyCode.B, -- FIX 2: Menambahkan koma yang hilang
+		Bring = Enum.KeyCode.B,
 		NoClip = Enum.KeyCode.N,
 		QuickDiamond = Enum.KeyCode.Q,
 		Fly = Enum.KeyCode.F,
@@ -394,6 +394,135 @@ App.Features.DropAllTools = function()
 end
 
 -- ==========================================
+-- MODUL AURA KILL
+-- ==========================================
+App.Features.AuraKill = {
+	Enable = function() end,
+	Disable = function() end,
+	Update = function(dt) -- Dipanggil terus menerus oleh Heartbeat
+		local char = LocalPlayer.Character
+		local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+		local myTool = char and char:FindFirstChildOfClass("Tool")
+		
+		-- Batalkan jika tidak memegang pedang/tool
+		if not (myRoot and myTool and myTool:FindFirstChild("Handle")) then return end
+
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer and p.Character then
+				local enemyRoot = p.Character:FindFirstChild("HumanoidRootPart")
+				local enemyHum = p.Character:FindFirstChildOfClass("Humanoid")
+				
+				local isEnemy = true
+				
+				-- Cek Tim (Teman = bukan musuh)
+				if p.Team and LocalPlayer.Team and p.Team == LocalPlayer.Team then 
+					isEnemy = false 
+				end
+				
+				-- Cek Pengecualian Nama (Exceptions)
+				if App.Config.AuraExceptions and App.Config.AuraExceptions ~= "" then
+					if string.find(string.lower(App.Config.AuraExceptions), string.lower(p.Name)) then
+						isEnemy = false
+					end
+				end
+				
+				if isEnemy and enemyRoot and enemyHum and enemyHum.Health > 0 then
+					local dist = (myRoot.Position - enemyRoot.Position).Magnitude
+					if dist <= App.Config.AuraRadius then
+						myTool:Activate()
+						pcall(function()
+							firetouchinterest(myTool.Handle, enemyRoot, 0)
+							firetouchinterest(myTool.Handle, enemyRoot, 1)
+						end)
+					end
+				end
+			end
+		end
+	end
+}
+
+-- ==========================================
+-- MODUL FLY (Modern Physics)
+-- ==========================================
+local flyAttachment, flyVelocity, flyGyro
+
+App.Features.Fly = {
+	Enable = function()
+		local char = LocalPlayer.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart")
+		if not root then return end
+
+		flyAttachment = Instance.new("Attachment", root)
+		
+		flyVelocity = Instance.new("LinearVelocity", root)
+		flyVelocity.Attachment0 = flyAttachment
+		flyVelocity.MaxForce = math.huge
+		flyVelocity.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+		
+		flyGyro = Instance.new("AlignOrientation", root)
+		flyGyro.Attachment0 = flyAttachment
+		flyGyro.Mode = Enum.OrientationAlignmentMode.OneAttachment
+		flyGyro.MaxTorque = math.huge
+		
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if hum then hum.PlatformStand = true end
+	end,
+	
+	Disable = function()
+		if flyAttachment then flyAttachment:Destroy() end
+		if flyVelocity then flyVelocity:Destroy() end
+		if flyGyro then flyGyro:Destroy() end
+		
+		local char = LocalPlayer.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		if hum then hum.PlatformStand = false end
+	end,
+	
+	Update = function(dt) -- Dipanggil oleh RenderStepped agar mulus dengan kamera
+		local char = LocalPlayer.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart")
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		
+		if not (root and hum and flyVelocity and flyGyro) then return end
+		
+		local cam = workspace.CurrentCamera
+		flyGyro.CFrame = cam.CFrame
+		
+		local vel = Vector3.new(0, 0, 0)
+		
+		if UIS.KeyboardEnabled then
+			-- Kontrol PC (WASD + Space/LeftControl)
+			local moveVector = Vector3.new()
+			if UIS:IsKeyDown(Enum.KeyCode.W) then moveVector += cam.CFrame.LookVector end
+			if UIS:IsKeyDown(Enum.KeyCode.S) then moveVector -= cam.CFrame.LookVector end
+			if UIS:IsKeyDown(Enum.KeyCode.A) then moveVector -= cam.CFrame.RightVector end
+			if UIS:IsKeyDown(Enum.KeyCode.D) then moveVector += cam.CFrame.RightVector end
+			
+			if moveVector.Magnitude > 0 then
+				vel = moveVector.Unit * App.Config.FlySpeed
+			end
+			
+			if UIS:IsKeyDown(Enum.KeyCode.Space) then vel += Vector3.new(0, App.Config.FlySpeed, 0) end
+			if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then vel -= Vector3.new(0, App.Config.FlySpeed, 0) end
+		else
+			-- Kontrol Mobile (Joystick Proyeksi Kamera)
+			local moveDir = hum.MoveDirection
+			if moveDir.Magnitude > 0 then
+				local forwardDot = moveDir:Dot(cam.CFrame.LookVector * Vector3.new(1,0,1).Unit)
+				local rightDot = moveDir:Dot(cam.CFrame.RightVector * Vector3.new(1,0,1).Unit)
+				local moveVector = cam.CFrame.LookVector * forwardDot + cam.CFrame.RightVector * rightDot
+				if moveVector.Magnitude > 0 then
+					vel = moveVector.Unit * App.Config.FlySpeed
+				end
+			end
+		end
+		
+		flyVelocity.VectorVelocity = vel
+	end
+}
+
+-- Separate between UI and Feature
+-- ==========================================
 -- 4. UI BUILDER
 -- ==========================================
 function App.UI.Init()
@@ -575,6 +704,39 @@ function App.UI.Init()
 		return btn
 	end
 
+    function App.UI.CreateSeparator(text)
+		local lab = Instance.new("TextLabel", App.UI.Content)
+		lab.Size = UDim2.new(1,0,0,25)
+		lab.BackgroundTransparency = 1
+		lab.Font = Enum.Font.Gotham
+		lab.TextSize = 12
+		lab.TextColor3 = Color3.fromRGB(170,170,170)
+		lab.Text = "─────────  " .. (text or "") .. "  ─────────"
+		lab.TextXAlignment = Enum.TextXAlignment.Center
+		return lab
+	end
+
+	function App.UI.CreateTextBox(placeholder, defaultText, callback)
+		local frame = Instance.new("Frame", App.UI.Content)
+		frame.Size = UDim2.new(1,0,0,30)
+		frame.BackgroundTransparency = 1
+		
+		local box = Instance.new("TextBox", frame)
+		box.Size = UDim2.new(1,0,1,0)
+		box.BackgroundColor3 = Color3.fromRGB(40,40,40)
+		box.TextColor3 = Color3.fromRGB(255,255,255)
+		box.Font = Enum.Font.Gotham
+		box.TextSize = 13
+		box.PlaceholderText = placeholder
+		box.Text = tostring(defaultText)
+		Instance.new("UICorner", box).CornerRadius = UDim.new(0,6)
+		
+		box.FocusLost:Connect(function()
+			if callback then callback(box.Text) end
+		end)
+		return box
+	end
+
     function App.UI.CreateButton(name, callback, hotkeyStr)
 		local btn = Instance.new("TextButton", App.UI.Content)
 		btn.Size = UDim2.new(1, 0, 0, 32)
@@ -605,6 +767,21 @@ function App.UI.Init()
 	App.UI.CreateToggle("WalkSpeed", "WalkSpeed", App.Features.WalkSpeed, "(F3)")
 	App.UI.CreateToggle("NoClip", "NoClip", App.Features.NoClip, "(N)")
 	App.UI.CreateToggle("Quick Diamond", "QuickDiamond", App.Features.QuickDiamond, "(Q)")
+    App.UI.CreateToggle("Fly (PC/Mobile)", "Fly", App.Features.Fly, "(F)")
+
+	-- Area Aura Kill
+	App.UI.CreateSeparator("Aura Kill Settings")
+	
+	App.UI.CreateTextBox("Radius (Studs)", App.Config.AuraRadius, function(text)
+		local val = tonumber(text)
+		if val then App.Config.AuraRadius = val end
+	end)
+	
+	App.UI.CreateTextBox("Kecualikan Musuh (Koma)", App.Config.AuraExceptions, function(text)
+		App.Config.AuraExceptions = text
+	end)
+	
+	App.UI.CreateToggle("Aura Kill", "AuraKill", App.Features.AuraKill, "(K)")
 	
 	-- Tombol Aksi
 	App.UI.CreateButton("DROP ALL TOOLS", App.Features.DropAllTools, "(G)")
@@ -639,8 +816,14 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 RunService.Heartbeat:Connect(function(dt)
+	-- Loop untuk WalkSpeed
 	if App.State.WalkSpeed and App.Features.WalkSpeed and App.Features.WalkSpeed.Update then
 		App.Features.WalkSpeed.Update(dt)
+	end
+	
+	-- Loop untuk Aura Kill
+	if App.State.AuraKill and App.Features.AuraKill and App.Features.AuraKill.Update then
+		App.Features.AuraKill.Update(dt)
 	end
 end)
 
