@@ -262,6 +262,137 @@ App.Features.ESP = {
 	end
 }
 
+App.Features.AutoE = {
+	Enable = function()
+		if not VIM then warn("VirtualInputManager tidak tersedia.") return end
+		task.spawn(function()
+			while App.State.AutoE do
+				pcall(function()
+					VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+					VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+				end)
+				task.wait(App.Config.AutoEInterval)
+			end
+		end)
+	end,
+	Disable = function() end -- Loop otomatis berhenti karena App.State.AutoE menjadi false
+}
+
+-- ==========================================
+-- MODUL WALKSPEED
+-- ==========================================
+local OriginalWalkSpeeds = {}
+App.Features.WalkSpeed = {
+	Enable = function()
+		local char = LocalPlayer.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum then
+				if not OriginalWalkSpeeds[char] then OriginalWalkSpeeds[char] = hum.WalkSpeed end
+				hum.WalkSpeed = App.Config.WalkValue
+			end
+		end
+	end,
+	
+	Disable = function()
+		local char = LocalPlayer.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum and OriginalWalkSpeeds[char] then
+				hum.WalkSpeed = OriginalWalkSpeeds[char]
+			end
+		end
+	end,
+	
+	Update = function(dt) -- Ini akan dipanggil terus menerus oleh Loop Heartbeat
+		local char = LocalPlayer.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum and hum.WalkSpeed ~= App.Config.WalkValue then
+				if not OriginalWalkSpeeds[char] then OriginalWalkSpeeds[char] = hum.WalkSpeed end
+				hum.WalkSpeed = App.Config.WalkValue
+			end
+		end
+	end
+}
+
+-- ==========================================
+-- MODUL NOCLIP
+-- ==========================================
+local function applyNoClip(char)
+	if not char then return end
+	for _, part in ipairs(char:GetDescendants()) do
+		if part:IsA("BasePart") then
+			pcall(function() part.CanCollide = false end)
+		end
+	end
+end
+
+local function restoreNoClip(char)
+	if not char then return end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	for _, part in ipairs(char:GetDescendants()) do
+		if part:IsA("BasePart") then
+			if part.Parent:IsA("Accessory") or part.Parent:IsA("Tool") or part.Parent:IsA("Accoutrement") then
+				pcall(function() part.CanCollide = false end)
+			else
+				pcall(function() part.CanCollide = true end)
+			end
+		end
+	end
+	if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
+end
+
+App.Features.NoClip = {
+	Enable = function()
+		-- NoClip harus berjalan di RunService.Stepped agar mulus menembus dinding
+		App.AddConnection("NoClipStepped", RunService.Stepped:Connect(function()
+			if App.State.NoClip then applyNoClip(LocalPlayer.Character) end
+		end))
+	end,
+	Disable = function()
+		if App.Connections["NoClipStepped"] then App.Connections["NoClipStepped"]:Disconnect() end
+		restoreNoClip(LocalPlayer.Character)
+	end
+}
+
+-- ==========================================
+-- MODUL QUICK DIAMOND
+-- ==========================================
+App.Features.QuickDiamond = {
+	Enable = function()
+		local diamondsFolder = Workspace:FindFirstChild("Diamonds")
+		if diamondsFolder then
+			for _, diamondModel in ipairs(diamondsFolder:GetChildren()) do
+				if diamondModel:IsA("Model") and diamondModel.Name == "Diamond" then
+					for _, desc in ipairs(diamondModel:GetDescendants()) do
+						if desc:IsA("ProximityPrompt") then
+							desc.HoldDuration = 0
+						end
+					end
+				end
+			end
+		end
+	end,
+	Disable = function() end 
+}
+
+-- ==========================================
+-- MODUL DROP ALL TOOLS (Bukan Toggle, tapi Aksi)
+-- ==========================================
+App.Features.DropAllTools = function()
+	for _, v in pairs(LocalPlayer.Backpack:GetChildren()) do
+		if v:IsA("Tool") then v.Parent = LocalPlayer.Character end
+	end
+	task.wait()
+	local char = LocalPlayer.Character
+	if char then
+		for _, v in pairs(char:GetChildren()) do
+			if v:IsA("Tool") then v.Parent = Workspace end
+		end
+	end
+end
+
 -- ==========================================
 -- 4. UI BUILDER
 -- ==========================================
@@ -444,8 +575,39 @@ function App.UI.Init()
 		return btn
 	end
 
+    function App.UI.CreateButton(name, callback, hotkeyStr)
+		local btn = Instance.new("TextButton", App.UI.Content)
+		btn.Size = UDim2.new(1, 0, 0, 32)
+		btn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+		btn.TextColor3 = Color3.fromRGB(235,235,235)
+		btn.Font = Enum.Font.GothamBold
+		btn.TextSize = 14
+		btn.Text = name .. " " .. (hotkeyStr or "")
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
+
+		btn.MouseButton1Click:Connect(function()
+			if callback then callback() end
+		end)
+
+		if hotkeyStr then
+			local keyString = string.match(hotkeyStr, "%((%w+)%)")
+			if keyString and Enum.KeyCode[keyString] then
+				App.Hotkeys["TOGGLE_"..keyString] = callback
+			end
+		end
+
+		return btn
+	end
+
 	-- RENDER TOMBOL KE LAYAR
 	App.UI.CreateToggle("ESP", "ESP", App.Features.ESP, "(F1)")
+	App.UI.CreateToggle("Auto Press E", "AutoE", App.Features.AutoE, "(F2)")
+	App.UI.CreateToggle("WalkSpeed", "WalkSpeed", App.Features.WalkSpeed, "(F3)")
+	App.UI.CreateToggle("NoClip", "NoClip", App.Features.NoClip, "(N)")
+	App.UI.CreateToggle("Quick Diamond", "QuickDiamond", App.Features.QuickDiamond, "(Q)")
+	
+	-- Tombol Aksi
+	App.UI.CreateButton("DROP ALL TOOLS", App.Features.DropAllTools, "(G)")
 end
 
 -- ==========================================
