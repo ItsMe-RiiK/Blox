@@ -36,7 +36,7 @@ local App = {
 	-- Config: Menyimpan nilai/setting (bukan status on/off)
 	Config = {
 		WalkValue = 25,
-		FlySpeed = 10,
+		FlySpeed = 50,
 		AutoEInterval = 0.1,
 		AuraRadius = 9999,
 		AuraExceptions = "",
@@ -557,6 +557,50 @@ App.Features.View = {
 	end
 }
 
+App.Features.Bring = {
+	Enable = function() end,
+	Disable = function() end,
+	Update = function(dt) -- Dipanggil oleh Heartbeat
+		local cam = workspace.CurrentCamera
+		if not cam then return end
+		
+		-- Target berada di depan kamera (Dist)
+		local targetCF = cam.CFrame * CFrame.new(0, 0, -App.Config.Bring_Dist)
+
+		if App.Config.Bring_Mode == "ALL" then
+			for _, p in ipairs(Players:GetPlayers()) do
+				local isExcluded = false
+				if App.Config.Bring_Exceptions and App.Config.Bring_Exceptions ~= "" then
+					if string.find(string.lower(App.Config.Bring_Exceptions), string.lower(p.Name)) then
+						isExcluded = true
+					end
+				end
+
+				-- Tarik semua musuh yang bukan teman/diri sendiri dan tidak dikecualikan
+				if not isExcluded and p ~= LocalPlayer and (not p.Team or not LocalPlayer.Team or p.Team ~= LocalPlayer.Team) then
+					if p.Character then
+						local root = p.Character:FindFirstChild("HumanoidRootPart")
+						if root then 
+							root.CFrame = targetCF 
+							root.AssemblyLinearVelocity = Vector3.new(0,0,0)
+						end
+					end
+				end
+			end
+		elseif App.Config.Bring_Mode == "SINGLE" and App.Config.Bring_TargetName ~= "" then
+			-- Tarik satu target yang ditulis di kotak nama
+			local p = Players:FindFirstChild(App.Config.Bring_TargetName)
+			if p and p ~= LocalPlayer and p.Character then
+				local root = p.Character:FindFirstChild("HumanoidRootPart")
+				if root then 
+					root.CFrame = targetCF 
+					root.AssemblyLinearVelocity = Vector3.new(0,0,0)
+				end
+			end
+		end
+	end
+}
+
 -- Separate between UI and Feature
 -- ==========================================
 -- 4. UI BUILDER
@@ -583,10 +627,34 @@ function App.UI.Init()
 	Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0,10)
 	
 	local uiSizeConstraint = Instance.new("UISizeConstraint", MainFrame)
-	uiSizeConstraint.MaxSize = Vector2.new(440, 600)
+	uiSizeConstraint.MaxSize = Vector2.new(320, 550)
 	
 	App.UI.MainFrame = MainFrame
 
+	-- TOMBOL BUKA GUI (Hanya muncul saat GUI disembunyikan)
+	local OpenBtn = Instance.new("TextButton", MainScreenGui)
+	OpenBtn.Name = "OpenUIBtn"
+	OpenBtn.Size = UDim2.new(0, 45, 0, 45)
+	OpenBtn.Position = UDim2.new(1, -55, 0, 15) -- Pojok kanan atas layar
+	OpenBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+	OpenBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+	OpenBtn.Font = Enum.Font.GothamBold
+	OpenBtn.TextSize = 22
+	OpenBtn.Text = "⚙️" -- Ikon Gear/Setting
+	Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 8)
+	OpenBtn.Visible = false -- Disembunyikan secara default
+	App.UI.OpenBtn = OpenBtn
+
+	-- FUNGSI TOGGLE GUI (Dipakai oleh tombol "-" dan LeftAlt)
+	function App.UI.ToggleMainFrame()
+		local isVisible = App.UI.MainFrame.Visible
+		App.UI.MainFrame.Visible = not isVisible
+		App.UI.OpenBtn.Visible = isVisible
+	end
+	
+	OpenBtn.MouseButton1Click:Connect(App.UI.ToggleMainFrame)
+
+	-- ================== BAGIAN TITLE BAR ==================
 	local TitleBar = Instance.new("Frame", MainFrame)
 	TitleBar.Size = UDim2.new(1,0,0,36)
 	TitleBar.BackgroundTransparency = 1
@@ -602,34 +670,38 @@ function App.UI.Init()
 
 	local TitleLabel = Instance.new("TextLabel", TitleBar)
 	TitleLabel.Size = UDim2.new(1,-110,1,0)
-	TitleLabel.Position = UDim2.new(0.07,0,0,0)
+	TitleLabel.Position = UDim2.new(0.12,0,0,0)
 	TitleLabel.BackgroundTransparency = 1
 	TitleLabel.Font = Enum.Font.GothamBold
-	TitleLabel.TextSize = 16
+	TitleLabel.TextSize = 14
 	TitleLabel.TextColor3 = Color3.fromRGB(245,245,245)
-	TitleLabel.Text = "2P Battle Tycoon (V2)"
+	TitleLabel.Text = "2P Battle Tycoon"
 	TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 	local HintLabel = Instance.new("TextLabel", TitleBar)
 	HintLabel.Size = UDim2.new(0.3,0,1,0)
-	HintLabel.Position = UDim2.new(0.7,0,0,0)
+	HintLabel.Position = UDim2.new(0.65,0,0,0)
 	HintLabel.BackgroundTransparency = 1
 	HintLabel.Font = Enum.Font.Gotham
-	HintLabel.TextSize = 12
+	HintLabel.TextSize = 10
 	HintLabel.TextColor3 = Color3.fromRGB(170,170,170)
-	HintLabel.Text = "LeftAlt = Hide UI"
+	HintLabel.Text = "LeftAlt=Hide"
 	HintLabel.TextXAlignment = Enum.TextXAlignment.Right
 
 	local MinBtn = Instance.new("TextButton", TitleBar)
 	MinBtn.Size = UDim2.new(0,36,0,28)
 	MinBtn.Position = UDim2.new(1,-42,0,4)
-	MinBtn.BackgroundColor3 = Color3.fromRGB(58,58,60)
+	MinBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60) -- Warna merah agar seperti tombol Close
 	MinBtn.Font = Enum.Font.GothamBold
 	MinBtn.TextSize = 18
 	MinBtn.TextColor3 = Color3.fromRGB(240,240,240)
 	MinBtn.Text = "-"
 	Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0,6)
 
+	-- Hubungkan Tombol "-" untuk sembunyikan UI
+	MinBtn.MouseButton1Click:Connect(App.UI.ToggleMainFrame)
+
+	-- ================== BAGIAN CONTENT ==================
 	local Content = Instance.new("ScrollingFrame", MainFrame)
 	Content.Name = "Content"
 	Content.Size = UDim2.new(1,-10,1,-50)
@@ -814,12 +886,37 @@ function App.UI.Init()
 		App.Config.AuraExceptions = text
 	end)
 	App.UI.CreateToggle("Aura Kill", "AuraKill", App.Features.AuraKill, "(K)")
-	-- Bring
+	-- View
     App.UI.CreateSeparator("Target / Player System")
 	App.UI.CreateTextBox("Ketik Nama Player Disini", App.Config.Bring_TargetName, function(text)
 		App.Config.Bring_TargetName = text
 	end)
 	App.UI.CreateToggle("View Target", "View", App.Features.View, "(V)")
+    
+    --Bring
+    App.UI.CreateSeparator("Client Pull / Bring")
+
+	-- Tombol Switch Mode (ALL / SINGLE)
+	local modeBtn = App.UI.CreateButton("Mode: " .. App.Config.Bring_Mode, function()
+		App.Config.Bring_Mode = (App.Config.Bring_Mode == "ALL") and "SINGLE" or "ALL"
+		for _, v in ipairs(App.UI.Content:GetChildren()) do
+			if v:IsA("TextButton") and string.find(v.Text, "Mode:") then
+				v.Text = "Mode: " .. App.Config.Bring_Mode
+			end
+		end
+	end)
+	modeBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 80) -- Warna ungu gelap agar beda
+
+	App.UI.CreateTextBox("Jarak Tarik (Studs)", App.Config.Bring_Dist, function(text)
+		local val = tonumber(text)
+		if val then App.Config.Bring_Dist = val end
+	end)
+
+	App.UI.CreateTextBox("Pengecualian Bring (Koma)", App.Config.Bring_Exceptions, function(text)
+		App.Config.Bring_Exceptions = text
+	end)
+
+	App.UI.CreateToggle("Enable Bring Target", "Bring", App.Features.Bring, "(B)")
 
 	-- Tombol Aksi
 	App.UI.CreateButton("DROP ALL TOOLS", App.Features.DropAllTools, "(G)")
@@ -831,11 +928,8 @@ end
 UIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	
-	-- FIX 3: Pisahkan logika LeftAlt agar tidak memanggil fungsi secara salah
 	if input.KeyCode == App.Hotkeys.MainFrame then
-		if App.UI.MainFrame then
-			App.UI.MainFrame.Visible = not App.UI.MainFrame.Visible
-		end
+		if App.UI.ToggleMainFrame then App.UI.ToggleMainFrame() end
 		return
 	end
 	
@@ -854,14 +948,16 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 RunService.Heartbeat:Connect(function(dt)
-	-- Loop untuk WalkSpeed
 	if App.State.WalkSpeed and App.Features.WalkSpeed and App.Features.WalkSpeed.Update then
 		App.Features.WalkSpeed.Update(dt)
 	end
 	
-	-- Loop untuk Aura Kill
 	if App.State.AuraKill and App.Features.AuraKill and App.Features.AuraKill.Update then
 		App.Features.AuraKill.Update(dt)
+	end
+
+    if App.State.Bring and App.Features.Bring and App.Features.Bring.Update then
+		App.Features.Bring.Update(dt)
 	end
 end)
 
