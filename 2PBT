@@ -46,7 +46,6 @@ local App = {
 		Bring_Exceptions = "",
 	},
 
-	-- FIX 1: Format penulisan tabel yang benar tanpa "local"
 	Teleport_Coordinats = {
 		["Black"] = {
 			Spaceship = Vector3.new(153.2, 683.7, 814.4),
@@ -635,7 +634,7 @@ function App.UI.Init()
 	local OpenBtn = Instance.new("TextButton", MainScreenGui)
 	OpenBtn.Name = "OpenUIBtn"
 	OpenBtn.Size = UDim2.new(0, 45, 0, 45)
-	OpenBtn.Position = UDim2.new(1, -55, 0, 15) -- Pojok kanan atas layar
+	OpenBtn.Position = UDim2.new(1, -65, 0, 15) -- Pojok kanan atas layar
 	OpenBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
 	OpenBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
 	OpenBtn.Font = Enum.Font.GothamBold
@@ -722,13 +721,6 @@ function App.UI.Init()
 	listLayout.Padding = UDim.new(0,5)
 	
 	App.UI.Content = Content
-
-	local minimized = false
-	MinBtn.MouseButton1Click:Connect(function()
-		minimized = not minimized
-		Content.Visible = not minimized
-		MinBtn.Text = minimized and "+" or "-"
-	end)
 
 	local dragging, dragInput, dragStart, startPosPixels
 	
@@ -845,6 +837,101 @@ function App.UI.Init()
 		return box
 	end
 
+    function App.UI.CreatePlayerDropdown(placeholder, defaultText, isMultiSelect, callback)
+		local container = Instance.new("Frame", App.UI.Content)
+		container.Size = UDim2.new(1, 0, 0, 30)
+		container.BackgroundTransparency = 1
+		container.ClipsDescendants = true
+		
+		local boxFrame = Instance.new("Frame", container)
+		boxFrame.Size = UDim2.new(1, 0, 0, 30)
+		boxFrame.BackgroundTransparency = 1
+		
+		local box = Instance.new("TextBox", boxFrame)
+		box.Size = UDim2.new(1, -30, 1, 0)
+		box.BackgroundColor3 = Color3.fromRGB(40,40,40)
+		box.TextColor3 = Color3.fromRGB(255,255,255)
+		box.Font = Enum.Font.Gotham
+		box.TextSize = 13
+		box.PlaceholderText = placeholder
+		box.Text = tostring(defaultText or "")
+		box.TextXAlignment = Enum.TextXAlignment.Left
+		box.ClearTextOnFocus = false
+		local pad = Instance.new("UIPadding", box)
+		pad.PaddingLeft = UDim.new(0, 8)
+		Instance.new("UICorner", box).CornerRadius = UDim.new(0,6)
+		
+		local dropBtn = Instance.new("TextButton", boxFrame)
+		dropBtn.Size = UDim2.new(0, 26, 0, 26)
+		dropBtn.Position = UDim2.new(1, -28, 0, 2)
+		dropBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+		dropBtn.TextColor3 = Color3.fromRGB(255,255,255)
+		dropBtn.Font = Enum.Font.GothamBold
+		dropBtn.Text = "▼"
+		Instance.new("UICorner", dropBtn).CornerRadius = UDim.new(0,6)
+		
+		local listFrame = Instance.new("ScrollingFrame", container)
+		listFrame.Size = UDim2.new(1, 0, 0, 120)
+		listFrame.Position = UDim2.new(0, 0, 0, 32)
+		listFrame.BackgroundColor3 = Color3.fromRGB(35,35,35)
+		listFrame.ScrollBarThickness = 4
+		Instance.new("UICorner", listFrame).CornerRadius = UDim.new(0,6)
+		
+		local listLayout = Instance.new("UIListLayout", listFrame)
+		listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		
+		local isExpanded = false
+		local function toggleDropdown()
+			isExpanded = not isExpanded
+			if isExpanded then
+				-- Refresh isi list pemain saat dibuka
+				for _, c in ipairs(listFrame:GetChildren()) do
+					if c:IsA("TextButton") then c:Destroy() end
+				end
+				local ySize = 0
+				for _, p in ipairs(Players:GetPlayers()) do
+					if p ~= LocalPlayer then
+						local pBtn = Instance.new("TextButton", listFrame)
+						pBtn.Size = UDim2.new(1, 0, 0, 25)
+						pBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+						pBtn.TextColor3 = Color3.fromRGB(220,220,220)
+						pBtn.Font = Enum.Font.Gotham
+						pBtn.TextSize = 12
+						pBtn.Text = p.Name
+						
+						pBtn.MouseButton1Click:Connect(function()
+							if isMultiSelect then
+								local current = box.Text
+								if current == "" then box.Text = p.Name
+								elseif not string.find(current, p.Name) then box.Text = current .. ", " .. p.Name end
+							else
+								box.Text = p.Name
+							end
+							toggleDropdown() -- Tutup setelah memilih
+							if callback then callback(box.Text) end
+						end)
+						ySize = ySize + 25
+					end
+				end
+				listFrame.CanvasSize = UDim2.new(0, 0, 0, ySize)
+				local targetHeight = math.min(ySize, 120)
+				listFrame.Size = UDim2.new(1, 0, 0, targetHeight)
+				container.Size = UDim2.new(1, 0, 0, 32 + targetHeight)
+				dropBtn.Text = "▲"
+			else
+				container.Size = UDim2.new(1, 0, 0, 30)
+				dropBtn.Text = "▼"
+			end
+		end
+		
+		dropBtn.MouseButton1Click:Connect(toggleDropdown)
+		box.FocusLost:Connect(function()
+			if callback then callback(box.Text) end
+		end)
+		
+		return container
+	end
+
     function App.UI.CreateButton(name, callback, hotkeyStr)
 		local btn = Instance.new("TextButton", App.UI.Content)
 		btn.Size = UDim2.new(1, 0, 0, 32)
@@ -869,57 +956,51 @@ function App.UI.Init()
 		return btn
 	end
 
-	-- Render Tombol
+	-- ==================================
+	-- RENDER TOMBOL KE LAYAR
+	-- ==================================
 	App.UI.CreateToggle("ESP", "ESP", App.Features.ESP, "(F1)")
 	App.UI.CreateToggle("Auto Press E", "AutoE", App.Features.AutoE, "(F2)")
 	App.UI.CreateToggle("WalkSpeed", "WalkSpeed", App.Features.WalkSpeed, "(F3)")
 	App.UI.CreateToggle("NoClip", "NoClip", App.Features.NoClip, "(N)")
 	App.UI.CreateToggle("Quick Diamond", "QuickDiamond", App.Features.QuickDiamond, "(Q)")
-    App.UI.CreateToggle("Fly (PC/Mobile)", "Fly", App.Features.Fly, "(F)")
-    -- Aura
-	App.UI.CreateSeparator("Aura Kill Settings")
-	App.UI.CreateTextBox("Radius (Studs)", App.Config.AuraRadius, function(text)
+	App.UI.CreateButton("DROP ALL TOOLS", App.Features.DropAllTools, "(G)")
+	App.UI.CreateToggle("Fly", "Fly", App.Features.Fly, "(F)")
+	-- Area Aura Kill
+	App.UI.CreateSeparator("AuraKill Settings")
+	App.UI.CreateTextBox("Radius", App.Config.AuraRadius, function(text)
 		local val = tonumber(text)
 		if val then App.Config.AuraRadius = val end
 	end)
-	App.UI.CreateTextBox("Kecualikan Musuh (Koma)", App.Config.AuraExceptions, function(text)
+	App.UI.CreatePlayerDropdown("Exceptions", App.Config.AuraExceptions, true, function(text)
 		App.Config.AuraExceptions = text
 	end)
-	App.UI.CreateToggle("Aura Kill", "AuraKill", App.Features.AuraKill, "(K)")
-	-- View
-    App.UI.CreateSeparator("Target / Player System")
-	App.UI.CreateTextBox("Ketik Nama Player Disini", App.Config.Bring_TargetName, function(text)
+	App.UI.CreateToggle("AuraKill", "AuraKill", App.Features.AuraKill, "(K)")
+	-- Area Target & Bring (Digabung untuk kemudahan)
+	App.UI.CreateSeparator("Bring Target")
+	App.UI.CreatePlayerDropdown("Target (Pilih/Ketik Nama)", App.Config.Bring_TargetName, false, function(text)
 		App.Config.Bring_TargetName = text
 	end)
 	App.UI.CreateToggle("View Target", "View", App.Features.View, "(V)")
-    
-    --Bring
-    App.UI.CreateSeparator("Client Pull / Bring")
 
-	-- Tombol Switch Mode (ALL / SINGLE)
-	local modeBtn = App.UI.CreateButton("Mode: " .. App.Config.Bring_Mode, function()
+	local modeBtn = App.UI.CreateButton("Mode Pull: " .. App.Config.Bring_Mode, function()
 		App.Config.Bring_Mode = (App.Config.Bring_Mode == "ALL") and "SINGLE" or "ALL"
 		for _, v in ipairs(App.UI.Content:GetChildren()) do
-			if v:IsA("TextButton") and string.find(v.Text, "Mode:") then
-				v.Text = "Mode: " .. App.Config.Bring_Mode
+			if v:IsA("TextButton") and string.find(v.Text, "Mode Pull:") then
+				v.Text = "Mode Pull: " .. App.Config.Bring_Mode
 			end
 		end
 	end)
-	modeBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 80) -- Warna ungu gelap agar beda
+	modeBtn.BackgroundColor3 = Color3.fromRGB(60, 50, 80)
 
-	App.UI.CreateTextBox("Jarak Tarik (Studs)", App.Config.Bring_Dist, function(text)
+	App.UI.CreateTextBox("Dist", App.Config.Bring_Dist, function(text)
 		local val = tonumber(text)
 		if val then App.Config.Bring_Dist = val end
 	end)
-
-	App.UI.CreateTextBox("Pengecualian Bring (Koma)", App.Config.Bring_Exceptions, function(text)
+	App.UI.CreatePlayerDropdown("Exceptions", App.Config.Bring_Exceptions, true, function(text)
 		App.Config.Bring_Exceptions = text
 	end)
-
 	App.UI.CreateToggle("Enable Bring Target", "Bring", App.Features.Bring, "(B)")
-
-	-- Tombol Aksi
-	App.UI.CreateButton("DROP ALL TOOLS", App.Features.DropAllTools, "(G)")
 end
 
 -- ==========================================
@@ -962,7 +1043,6 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 -- ==========================================
--- 6. START APPLICATION
+-- 6. START SCRIPT
 -- ==========================================
 App.UI.Init()
-print("2P Battle Tycoon Script (V2 Modular) Loaded successfully!")
