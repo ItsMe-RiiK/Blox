@@ -53,7 +53,7 @@ local App = {
 			PrivateIsland = Vector3.new(145.2, 87.5, 697.5),
 			Submarine = Vector3.new(61.8, -101.0, 154.9),
 			Spawn = Vector3.new(64.1, 72.0, 131.3),
-			Safezone = Vector3.new(64.101, 184.000, 196.148),
+			Safezone = Vector3.new(64.101, 184.000, 196.148), --semua safezone tidak dimasukan kedalam ui
 			Temple1 = Vector3.new(176, -57, 573),
 			Temple2 = Vector3.new(176, -57, 673),
 		},
@@ -148,6 +148,7 @@ local App = {
 		Fly = Enum.KeyCode.F,
 		View = Enum.KeyCode.V,
 		DropAllTools = Enum.KeyCode.G,
+        --Teleport = Enum.KeyCode.T,
 	},
 }
 
@@ -191,7 +192,7 @@ local function createESPForPlayer(p)
 	clearESPForPlayer(p)
 
 	local hl = Instance.new("Highlight")
-	hl.Name = "TPB_BoxESP"
+	hl.Name = "ESP"
 	hl.Adornee = char
 	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	hl.OutlineTransparency = 0
@@ -203,7 +204,7 @@ local function createESPForPlayer(p)
 	local bg = nil
 	if head then
 		bg = Instance.new("BillboardGui")
-		bg.Name = "InfoESP"
+		bg.Name = "Name"
 		bg.Adornee = head
 		bg.Size = UDim2.new(0, 200, 0, 50) 
 		bg.StudsOffset = Vector3.new(0, 4, 0) 
@@ -413,7 +414,6 @@ App.Features.AuraKill = {
 			if p ~= LocalPlayer and p.Character then
 				local enemyRoot = p.Character:FindFirstChild("HumanoidRootPart")
 				local enemyHum = p.Character:FindFirstChildOfClass("Humanoid")
-				
 				local isEnemy = true
 				
 				-- Cek Tim (Teman = bukan musuh)
@@ -466,21 +466,21 @@ App.Features.Fly = {
 		flyGyro.Attachment0 = flyAttachment
 		flyGyro.Mode = Enum.OrientationAlignmentMode.OneAttachment
 		flyGyro.MaxTorque = math.huge
-		
+        flyGyro.Responsiveness = 200
+
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if hum then hum.PlatformStand = true end
 
-		-- Sistem Naik/Turun (Space/Ctrl)
 		App.AddConnection("FlyInputBegan", UIS.InputBegan:Connect(function(input, gp)
 			if gp then return end
 			if input.KeyCode == Enum.KeyCode.Space then flyVertical = 1
-			elseif input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.LeftShift then flyVertical = -1 end
+			elseif input.KeyCode == Enum.KeyCode.LeftControl then flyVertical = -1 end
 		end))
 
 		App.AddConnection("FlyInputEnded", UIS.InputEnded:Connect(function(input, gp)
 			if gp then return end
 			if input.KeyCode == Enum.KeyCode.Space and flyVertical == 1 then flyVertical = 0
-			elseif (input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.LeftShift) and flyVertical == -1 then flyVertical = 0 end
+			elseif (input.KeyCode == Enum.KeyCode.LeftControl) and flyVertical == -1 then flyVertical = 0 end
 		end))
 	end,
 	
@@ -507,7 +507,6 @@ App.Features.Fly = {
 		local cam = workspace.CurrentCamera
 		flyGyro.CFrame = cam.CFrame
 		
-		-- MENGGUNAKAN GETMOVEVECTOR DARI SCRIPT ANDA (Support Mobile & PC)
 		local moveVector = Controls:GetMoveVector()
 		local lookVector = cam.CFrame.LookVector
 		local rightVector = cam.CFrame.RightVector
@@ -606,12 +605,12 @@ App.Features.Bring = {
 -- ==========================================
 function App.UI.Init()
 	pcall(function()
-		local old = PlayerGui:FindFirstChild("TPB_TycoonGUI_Final")
+		local old = PlayerGui:FindFirstChild("2PBT_GUI")
 		if old then old:Destroy() end
 	end)
 
 	local MainScreenGui = Instance.new("ScreenGui")
-	MainScreenGui.Name = "TPB_TycoonGUI_Final"
+	MainScreenGui.Name = "2PBT_GUI"
 	MainScreenGui.DisplayOrder = 9999
 	MainScreenGui.ResetOnSpawn = false
 	MainScreenGui.Parent = PlayerGui
@@ -626,7 +625,7 @@ function App.UI.Init()
 	Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0,10)
 	
 	local uiSizeConstraint = Instance.new("UISizeConstraint", MainFrame)
-	uiSizeConstraint.MaxSize = Vector2.new(320, 550)
+	uiSizeConstraint.MaxSize = Vector2.new(320, 500)
 	
 	App.UI.MainFrame = MainFrame
 
@@ -634,14 +633,14 @@ function App.UI.Init()
 	local OpenBtn = Instance.new("TextButton", MainScreenGui)
 	OpenBtn.Name = "OpenUIBtn"
 	OpenBtn.Size = UDim2.new(0, 45, 0, 45)
-	OpenBtn.Position = UDim2.new(1, -65, 0, 15) -- Pojok kanan atas layar
+	OpenBtn.Position = UDim2.new(1, -55, 0, 5) -- Pojok kanan atas layar
 	OpenBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
 	OpenBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
 	OpenBtn.Font = Enum.Font.GothamBold
 	OpenBtn.TextSize = 22
-	OpenBtn.Text = "⚙️" -- Ikon Gear/Setting
+	OpenBtn.Text = "⚙️"
 	Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 8)
-	OpenBtn.Visible = false -- Disembunyikan secara default
+	OpenBtn.Visible = false
 	App.UI.OpenBtn = OpenBtn
 
 	-- FUNGSI TOGGLE GUI (Dipakai oleh tombol "-" dan LeftAlt)
@@ -676,16 +675,6 @@ function App.UI.Init()
 	TitleLabel.TextColor3 = Color3.fromRGB(245,245,245)
 	TitleLabel.Text = "2P Battle Tycoon"
 	TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-	local HintLabel = Instance.new("TextLabel", TitleBar)
-	HintLabel.Size = UDim2.new(0.3,0,1,0)
-	HintLabel.Position = UDim2.new(0.65,0,0,0)
-	HintLabel.BackgroundTransparency = 1
-	HintLabel.Font = Enum.Font.Gotham
-	HintLabel.TextSize = 10
-	HintLabel.TextColor3 = Color3.fromRGB(170,170,170)
-	HintLabel.Text = "LeftAlt=Hide"
-	HintLabel.TextXAlignment = Enum.TextXAlignment.Right
 
 	local MinBtn = Instance.new("TextButton", TitleBar)
 	MinBtn.Size = UDim2.new(0,36,0,28)
@@ -964,24 +953,27 @@ function App.UI.Init()
 	App.UI.CreateToggle("WalkSpeed", "WalkSpeed", App.Features.WalkSpeed, "(F3)")
 	App.UI.CreateToggle("NoClip", "NoClip", App.Features.NoClip, "(N)")
 	App.UI.CreateToggle("Quick Diamond", "QuickDiamond", App.Features.QuickDiamond, "(Q)")
-	App.UI.CreateButton("DROP ALL TOOLS", App.Features.DropAllTools, "(G)")
-	App.UI.CreateToggle("Fly", "Fly", App.Features.Fly, "(F)")
+    App.UI.CreateToggle("Fly", "Fly", App.Features.Fly, "(F)")
+    App.UI.CreateToggle("AuraKill", "AuraKill", App.Features.AuraKill, "(K)")
+	App.UI.CreateToggle("View Target", "View", App.Features.View, "(V)")
+	App.UI.CreateToggle("Enable Bring Target", "Bring", App.Features.Bring, "(B)")
+
 	-- Area Aura Kill
-	App.UI.CreateSeparator("AuraKill Settings")
+	App.UI.CreateSeparator("AuraKill Setting")
 	App.UI.CreateTextBox("Radius", App.Config.AuraRadius, function(text)
 		local val = tonumber(text)
 		if val then App.Config.AuraRadius = val end
 	end)
+
 	App.UI.CreatePlayerDropdown("Exceptions", App.Config.AuraExceptions, true, function(text)
 		App.Config.AuraExceptions = text
 	end)
-	App.UI.CreateToggle("AuraKill", "AuraKill", App.Features.AuraKill, "(K)")
-	-- Area Target & Bring (Digabung untuk kemudahan)
-	App.UI.CreateSeparator("Bring Target")
-	App.UI.CreatePlayerDropdown("Target (Pilih/Ketik Nama)", App.Config.Bring_TargetName, false, function(text)
+
+	-- Area Target & Bring (Digabung)
+	App.UI.CreateSeparator("Bring/View")
+	App.UI.CreatePlayerDropdown("Target", App.Config.Bring_TargetName, false, function(text)
 		App.Config.Bring_TargetName = text
 	end)
-	App.UI.CreateToggle("View Target", "View", App.Features.View, "(V)")
 
 	local modeBtn = App.UI.CreateButton("Mode Pull: " .. App.Config.Bring_Mode, function()
 		App.Config.Bring_Mode = (App.Config.Bring_Mode == "ALL") and "SINGLE" or "ALL"
@@ -997,10 +989,20 @@ function App.UI.Init()
 		local val = tonumber(text)
 		if val then App.Config.Bring_Dist = val end
 	end)
+
 	App.UI.CreatePlayerDropdown("Exceptions", App.Config.Bring_Exceptions, true, function(text)
 		App.Config.Bring_Exceptions = text
 	end)
-	App.UI.CreateToggle("Enable Bring Target", "Bring", App.Features.Bring, "(B)")
+
+    -- Area fly Toggle
+    App.UI.CreateSeparator("Fly Settings")
+	App.UI.CreateTextBox("Fly Speed", App.Config.FlySpeed, function(text)
+		local val = tonumber(text)
+		if val then App.Config.FlySpeed = val end
+	end)
+
+    -- DropToolstoggle must be last
+    App.UI.CreateButton("DROP ALL TOOLS", App.Features.DropAllTools, "(G)") -- sengaja di akhirkan toggle ini agar tidak mudah terlihat
 end
 
 -- ==========================================
@@ -1042,7 +1044,5 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 end)
 
--- ==========================================
--- 6. START SCRIPT
--- ==========================================
+
 App.UI.Init()
