@@ -11,6 +11,9 @@ local Camera = Workspace.CurrentCamera or Workspace:FindFirstChild("CurrentCamer
 local VIM = nil
 pcall(function() VIM = game:GetService("VirtualInputManager") end)
 
+local PlayerModule = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule"))
+local Controls = PlayerModule:GetControls()
+
 -- ==========================================
 -- 2. APP STRUCTURE (CORE ARCHITECTURE)
 -- ==========================================
@@ -445,6 +448,7 @@ App.Features.AuraKill = {
 -- MODUL FLY (Modern Physics)
 -- ==========================================
 local flyAttachment, flyVelocity, flyGyro
+local flyVertical = 0
 
 App.Features.Fly = {
 	Enable = function()
@@ -466,6 +470,19 @@ App.Features.Fly = {
 		
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if hum then hum.PlatformStand = true end
+
+		-- Sistem Naik/Turun (Space/Ctrl)
+		App.AddConnection("FlyInputBegan", UIS.InputBegan:Connect(function(input, gp)
+			if gp then return end
+			if input.KeyCode == Enum.KeyCode.Space then flyVertical = 1
+			elseif input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.LeftShift then flyVertical = -1 end
+		end))
+
+		App.AddConnection("FlyInputEnded", UIS.InputEnded:Connect(function(input, gp)
+			if gp then return end
+			if input.KeyCode == Enum.KeyCode.Space and flyVertical == 1 then flyVertical = 0
+			elseif (input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.LeftShift) and flyVertical == -1 then flyVertical = 0 end
+		end))
 	end,
 	
 	Disable = function()
@@ -476,48 +493,67 @@ App.Features.Fly = {
 		local char = LocalPlayer.Character
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		if hum then hum.PlatformStand = false end
+
+		if App.Connections["FlyInputBegan"] then App.Connections["FlyInputBegan"]:Disconnect() end
+		if App.Connections["FlyInputEnded"] then App.Connections["FlyInputEnded"]:Disconnect() end
+		flyVertical = 0
 	end,
 	
-	Update = function(dt) -- Dipanggil oleh RenderStepped agar mulus dengan kamera
+	Update = function(dt) -- Dipanggil oleh RenderStepped
 		local char = LocalPlayer.Character
 		local root = char and char:FindFirstChild("HumanoidRootPart")
-		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		
-		if not (root and hum and flyVelocity and flyGyro) then return end
+		if not (root and flyVelocity and flyGyro) then return end
 		
 		local cam = workspace.CurrentCamera
 		flyGyro.CFrame = cam.CFrame
 		
-		local vel = Vector3.new(0, 0, 0)
+		-- MENGGUNAKAN GETMOVEVECTOR DARI SCRIPT ANDA (Support Mobile & PC)
+		local moveVector = Controls:GetMoveVector()
+		local lookVector = cam.CFrame.LookVector
+		local rightVector = cam.CFrame.RightVector
 		
-		if UIS.KeyboardEnabled then
-			-- Kontrol PC (WASD + Space/LeftControl)
-			local moveVector = Vector3.new()
-			if UIS:IsKeyDown(Enum.KeyCode.W) then moveVector += cam.CFrame.LookVector end
-			if UIS:IsKeyDown(Enum.KeyCode.S) then moveVector -= cam.CFrame.LookVector end
-			if UIS:IsKeyDown(Enum.KeyCode.A) then moveVector -= cam.CFrame.RightVector end
-			if UIS:IsKeyDown(Enum.KeyCode.D) then moveVector += cam.CFrame.RightVector end
-			
-			if moveVector.Magnitude > 0 then
-				vel = moveVector.Unit * App.Config.FlySpeed
-			end
-			
-			if UIS:IsKeyDown(Enum.KeyCode.Space) then vel += Vector3.new(0, App.Config.FlySpeed, 0) end
-			if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then vel -= Vector3.new(0, App.Config.FlySpeed, 0) end
-		else
-			-- Kontrol Mobile (Joystick Proyeksi Kamera)
-			local moveDir = hum.MoveDirection
-			if moveDir.Magnitude > 0 then
-				local forwardDot = moveDir:Dot(cam.CFrame.LookVector * Vector3.new(1,0,1).Unit)
-				local rightDot = moveDir:Dot(cam.CFrame.RightVector * Vector3.new(1,0,1).Unit)
-				local moveVector = cam.CFrame.LookVector * forwardDot + cam.CFrame.RightVector * rightDot
-				if moveVector.Magnitude > 0 then
-					vel = moveVector.Unit * App.Config.FlySpeed
-				end
+		local newVelocity = (lookVector * -moveVector.Z) + (rightVector * moveVector.X)
+		newVelocity = newVelocity + (Vector3.new(0, 1, 0) * flyVertical)
+		
+		flyVelocity.VectorVelocity = newVelocity * App.Config.FlySpeed
+	end
+}
+
+-- ==========================================
+-- MODUL VIEW TARGET
+-- ==========================================
+App.Features.View = {
+	Enable = function()
+		-- Kita akan menggunakan TargetName yang nanti diisi lewat UI Dropdown
+		local targetPlayer = Players:FindFirstChild(App.Config.Bring_TargetName)
+		if not targetPlayer then 
+			warn("Target belum dipilih atau tidak ditemukan!")
+			App.State.View = false -- Batalkan status jika gagal
+			return 
+		end
+		
+		local function updateCamera()
+			if targetPlayer.Character then
+				local targetHum = targetPlayer.Character:FindFirstChild("Humanoid")
+				if targetHum then workspace.CurrentCamera.CameraSubject = targetHum end
 			end
 		end
 		
-		flyVelocity.VectorVelocity = vel
+		updateCamera()
+		
+		-- Hook jika musuh mati / respawn
+		App.AddConnection("ViewTargetSpawn", targetPlayer.CharacterAdded:Connect(function()
+			task.wait(0.5)
+			updateCamera()
+		end))
+	end,
+	
+	Disable = function()
+		if App.Connections["ViewTargetSpawn"] then App.Connections["ViewTargetSpawn"]:Disconnect() end
+		local myChar = LocalPlayer.Character
+		local myHum = myChar and myChar:FindFirstChild("Humanoid")
+		if myHum then workspace.CurrentCamera.CameraSubject = myHum end
 	end
 }
 
@@ -761,28 +797,30 @@ function App.UI.Init()
 		return btn
 	end
 
-	-- RENDER TOMBOL KE LAYAR
+	-- Render Tombol
 	App.UI.CreateToggle("ESP", "ESP", App.Features.ESP, "(F1)")
 	App.UI.CreateToggle("Auto Press E", "AutoE", App.Features.AutoE, "(F2)")
 	App.UI.CreateToggle("WalkSpeed", "WalkSpeed", App.Features.WalkSpeed, "(F3)")
 	App.UI.CreateToggle("NoClip", "NoClip", App.Features.NoClip, "(N)")
 	App.UI.CreateToggle("Quick Diamond", "QuickDiamond", App.Features.QuickDiamond, "(Q)")
     App.UI.CreateToggle("Fly (PC/Mobile)", "Fly", App.Features.Fly, "(F)")
-
-	-- Area Aura Kill
+    -- Aura
 	App.UI.CreateSeparator("Aura Kill Settings")
-	
 	App.UI.CreateTextBox("Radius (Studs)", App.Config.AuraRadius, function(text)
 		local val = tonumber(text)
 		if val then App.Config.AuraRadius = val end
 	end)
-	
 	App.UI.CreateTextBox("Kecualikan Musuh (Koma)", App.Config.AuraExceptions, function(text)
 		App.Config.AuraExceptions = text
 	end)
-	
 	App.UI.CreateToggle("Aura Kill", "AuraKill", App.Features.AuraKill, "(K)")
-	
+	-- Bring
+    App.UI.CreateSeparator("Target / Player System")
+	App.UI.CreateTextBox("Ketik Nama Player Disini", App.Config.Bring_TargetName, function(text)
+		App.Config.Bring_TargetName = text
+	end)
+	App.UI.CreateToggle("View Target", "View", App.Features.View, "(V)")
+
 	-- Tombol Aksi
 	App.UI.CreateButton("DROP ALL TOOLS", App.Features.DropAllTools, "(G)")
 end
