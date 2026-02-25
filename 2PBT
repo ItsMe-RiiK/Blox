@@ -350,8 +350,14 @@ do
 		local newY = math.floor(startPosPixels.Y + delta.Y)
 		local screen = getScreenSize()
 		local frameSize = Vector2.new(MainFrame.AbsoluteSize.X, MainFrame.AbsoluteSize.Y)
-		newX = clamp(newX, 0, math.max(0, screen.X - frameSize.X))
-		newY = clamp(newY, 0, math.max(0, screen.Y - frameSize.Y))
+		local minX = frameSize.X / 2
+		local maxX = screen.X - (frameSize.X / 2)
+		local minY = frameSize.Y / 2
+		local maxY = screen.Y - (frameSize.Y / 2)
+		
+		newX = clamp(newX, minX, math.max(minX, maxX))
+		newY = clamp(newY, minY, math.max(minY, maxY))
+		
 		MainFrame.Position = UDim2.new(0, newX, 0, newY)
 	end
 	local function onInputEnded(input)
@@ -1433,6 +1439,25 @@ registerToggle("Aura Kill (K)", "AuraKill", function(state)
 	updateHUD("Aura Kill", state) 
 end)
 
+registerToggle("Fly (F)", "Fly", function(state)
+	applyFlyState()
+end)
+
+local viewBtn = Instance.new("TextButton", togglesScroll)
+viewBtn.Size = UDim2.new(1,0,0,32)
+viewBtn.BackgroundColor3 = Color3.fromRGB(36,36,36)
+viewBtn.TextColor3 = Color3.fromRGB(235,235,235)
+viewBtn.Font = Enum.Font.Gotham
+viewBtn.TextSize = 14
+viewBtn.Text = "View Target [OFF] (V)"
+Instance.new("UICorner", viewBtn).CornerRadius = UDim.new(0,6)
+
+viewBtn.MouseButton1Click:Connect(function()
+	toggleView()
+	viewBtn.Text = "View Target [" .. (isViewing and "ON" or "OFF") .. "] (V)"
+	viewBtn.BackgroundColor3 = isViewing and Color3.fromRGB(80,150,220) or Color3.fromRGB(36,36,36)
+end)
+
 keepPersistent(RunService.Heartbeat:Connect(function()
 	if FEATURE.AuraKill and LocalPlayer.Character then
 		local myRoot = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -1475,8 +1500,7 @@ end))
 
 local flyAttachment, flyVelocity, flyGyro
 
-local function toggleFly()
-	FEATURE.Fly = not FEATURE.Fly
+local function applyFlyState()
 	local char = LocalPlayer.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart")
 	if not root then return end
@@ -1502,33 +1526,31 @@ local function toggleFly()
 				local cam = workspace.CurrentCamera
 				flyGyro.CFrame = cam.CFrame
 				
-				local moveDir = hum.MoveDirection
 				local vel = Vector3.new(0, 0, 0)
 				
-				if moveDir.Magnitude > 0 then
-					if UIS.KeyboardEnabled then
-
-						local moveVector = Vector3.new()
-						if UIS:IsKeyDown(Enum.KeyCode.W) then moveVector += cam.CFrame.LookVector end
-						if UIS:IsKeyDown(Enum.KeyCode.S) then moveVector -= cam.CFrame.LookVector end
-						if UIS:IsKeyDown(Enum.KeyCode.A) then moveVector -= cam.CFrame.RightVector end
-						if UIS:IsKeyDown(Enum.KeyCode.D) then moveVector += cam.CFrame.RightVector end
-						
-						if moveVector.Magnitude > 0 then
-							vel = moveVector.Unit * FEATURE.FlySpeed
-						end
-					else
-
+				if UIS.KeyboardEnabled then
+					local moveVector = Vector3.new()
+					if UIS:IsKeyDown(Enum.KeyCode.W) then moveVector += cam.CFrame.LookVector end
+					if UIS:IsKeyDown(Enum.KeyCode.S) then moveVector -= cam.CFrame.LookVector end
+					if UIS:IsKeyDown(Enum.KeyCode.A) then moveVector -= cam.CFrame.RightVector end
+					if UIS:IsKeyDown(Enum.KeyCode.D) then moveVector += cam.CFrame.RightVector end
+					
+					if moveVector.Magnitude > 0 then
+						vel = moveVector.Unit * FEATURE.FlySpeed
+					end
+					
+					if UIS:IsKeyDown(Enum.KeyCode.Space) then vel += Vector3.new(0, FEATURE.FlySpeed, 0) end
+					if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then vel -= Vector3.new(0, FEATURE.FlySpeed, 0) end
+				else
+					local moveDir = hum.MoveDirection
+					if moveDir.Magnitude > 0 then
 						local forwardDot = moveDir:Dot(cam.CFrame.LookVector * Vector3.new(1,0,1).Unit)
 						local rightDot = moveDir:Dot(cam.CFrame.RightVector * Vector3.new(1,0,1).Unit)
 						local moveVector = cam.CFrame.LookVector * forwardDot + cam.CFrame.RightVector * rightDot
-						vel = moveVector * FEATURE.FlySpeed
+						if moveVector.Magnitude > 0 then
+							vel = moveVector.Unit * FEATURE.FlySpeed
+						end
 					end
-				end
-				
-				if UIS.KeyboardEnabled then
-					if UIS:IsKeyDown(Enum.KeyCode.Space) then vel += Vector3.new(0, FEATURE.FlySpeed, 0) end
-					if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then vel -= Vector3.new(0, FEATURE.FlySpeed, 0) end
 				end
 				
 				flyVelocity.VectorVelocity = vel
@@ -1598,9 +1620,15 @@ keepPersistent(UIS.InputBegan:Connect(function(input, gp)
 			ToggleCallbacks.AuraKill(not FEATURE.AuraKill) 
 		end
 	elseif input.KeyCode == Enum.KeyCode.F then
-		toggleFly()
+		if ToggleCallbacks and ToggleCallbacks.Fly then 
+			ToggleCallbacks.Fly(not FEATURE.Fly) 
+		end
 	elseif input.KeyCode == Enum.KeyCode.V then
 		toggleView()
+		if viewBtn then
+			viewBtn.Text = "View Target [" .. (isViewing and "ON" or "OFF") .. "] (V)"
+			viewBtn.BackgroundColor3 = isViewing and Color3.fromRGB(80,150,220) or Color3.fromRGB(36,36,36)
+		end
 	end
 end))
 
