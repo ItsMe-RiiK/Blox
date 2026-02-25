@@ -46,10 +46,10 @@ local App = {
 		Bring_Exceptions = "",
 	},
 
-	Connections = {},
-	UI = {},
-	Features = {},
-	Hotkeys = {
+	Connections {},
+	UI {},
+	Features {},
+	Hotkeys {
 		MainFrame = Enum.KeyCode.LeftAlt,
 	},
 
@@ -250,7 +250,7 @@ App.Features.ESP = {
 		if App.Connections["ESP_PlayerRemoving"] then App.Connections["ESP_PlayerRemoving"]:Disconnect() end
 
 		for key, conn in pairs(App.Connections) do
-			if string.sub(key, 1, 14) == "ESP_CharAdded_" then
+			if string.sub(key, 1, 14) == "ESP_CharAdded_" or string.sub(key, 1, 6) == "ESP_HP" then
 				conn:Disconnect()
 				App.Connections[key] = nil
 			end
@@ -323,7 +323,7 @@ local function restoreNoClip(char)
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	for _, part in ipairs(char:GetDescendants()) do
 		if part:IsA("BasePart") then
-			if part.Parent:IsA("Accessory") or part.Parent:IsA("Tool") or part.Parent:IsA("Accoutrement") then
+			if part.Parent:IsA("Accessory") or part.Parent:IsA("Tool") or part.Parent:IsA("Accoutrement") or part.Name == "HumanoidRootPart" then
 				pcall(function() part.CanCollide = false end)
 			else
 				pcall(function() part.CanCollide = true end)
@@ -674,7 +674,7 @@ App.UI.Init = function()
 	OpenBtn.Visible = false
 	App.UI.OpenBtn = OpenBtn
 
-	AApp.UI.ToggleMainFrame = function()
+	App.UI.ToggleMainFrame = function()
     	if App.UI.MainFrame and App.UI.OpenBtn then
         	local isVisible = App.UI.MainFrame.Visible
         	App.UI.MainFrame.Visible = not isVisible
@@ -798,15 +798,15 @@ App.UI.Init = function()
 
 		local function Toggle()
 			App.State[stateKey] = not App.State[stateKey]
-			local isActive = App.State[stateKey]
-
-			btn.Text = name .. " [" .. (isActive and "ON" or "OFF") .. "] " .. (hotkeyStr or "")
-			btn.BackgroundColor3 = isActive and Color3.fromRGB(80,150,220) or Color3.fromRGB(36,36,36)
 
 			if featureModule then
-				if isActive and featureModule.Enable then featureModule.Enable() end
-				if not isActive and featureModule.Disable then featureModule.Disable() end
+				if App.State[stateKey] and featureModule.Enable then featureModule.Enable() end
+				if not App.State[stateKey] and featureModule.Disable then featureModule.Disable() end
 			end
+
+			local isActive = App.State[stateKey]
+			btn.Text = name .. " [" .. (isActive and "ON" or "OFF") .. "] " .. (hotkeyStr or "")
+			btn.BackgroundColor3 = isActive and Color3.fromRGB(80,150,220) or Color3.fromRGB(36,36,36)
 		end
 
 		btn.MouseButton1Click:Connect(Toggle)
@@ -923,7 +923,11 @@ App.UI.Init = function()
 							else
 								box.Text = p.Name
 							end
-							toggleDropdown()
+
+							if not isMultiSelect then
+								toggleDropdown()
+							end
+							
 							if callback then callback(box.Text) end
 						end)
 						ySize = ySize + 25
