@@ -46,13 +46,6 @@ local App = {
 		Bring_Exceptions = "",
 	},
 
-	Connections {},
-	UI {},
-	Features {},
-	Hotkeys {
-		MainFrame = Enum.KeyCode.LeftAlt,
-	},
-
 	Teleport_Coordinats = {
 		["Black"] = {
 			Spaceship = Vector3.new(153.2, 683.7, 814.4),
@@ -138,6 +131,13 @@ local App = {
 			Neutral = Vector3.new(-24.8, 42.3, -83.2),
 		},
 	},
+
+	Connections = {},
+	UI = {},
+	Features = {},
+	Hotkeys = {
+	MainFrame = Enum.KeyCode.LeftAlt,
+	}
 }
 
 App.AddConnection = function(name, conn)
