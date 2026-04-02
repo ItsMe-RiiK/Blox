@@ -23,12 +23,24 @@ local App = {
 	Connections = {}
 }
 
--- [1] LOGIKA METATABLE SPOOFING
+local CachedHumanoid = nil
+
+local function UpdateHumanoidCache()
+	local char = LocalPlayer.Character
+	if char then
+		CachedHumanoid = char:WaitForChild("Humanoid", 5)
+	else
+		CachedHumanoid = nil
+	end
+end
+
+LocalPlayer.CharacterAdded:Connect(UpdateHumanoidCache)
+UpdateHumanoidCache()
+
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(self, key)
-	-- Spoof WalkSpeed
 	if App.State.SpoofWalkSpeed and not checkcaller() then
-		if self:IsA("Humanoid") and self.Parent == LocalPlayer.Character and key == "WalkSpeed" then
+		if self == CachedHumanoid and key == "WalkSpeed" then
 			return App.Config.WalkValueAsli
 		end
 	end
@@ -39,16 +51,14 @@ local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
 	local method = getnamecallmethod()
 	
-	-- Spoof GetState() untuk Fly
 	if App.State.SpoofFly and not checkcaller() then
-		if self:IsA("Humanoid") and self.Parent == LocalPlayer.Character and method == "GetState" then
+		if self == CachedHumanoid and method == "GetState" then
 			return App.Config.StateAsli
 		end
 	end
 	return oldNamecall(self, ...)
 end)
 
--- [2] FITUR UNTUK MENGAPLIKASIKAN EKSPLOIT (VISUAL)
 App.Features.WalkSpeed = {
 	Enable = function()
 		local char = LocalPlayer.Character
@@ -67,8 +77,6 @@ App.Features.WalkSpeed = {
 }
 
 App.Features.Fly = {
-    -- Ini hanya representasi state agar anti-cheat terkecoh. 
-    -- Logika BodyVelocity untuk bergerak di udara tetap diperlukan seperti di file 2PBT Anda.
 	Enable = function()
 		local char = LocalPlayer.Character
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -85,7 +93,6 @@ App.Features.Fly = {
 	end
 }
 
--- [3] PEMBUATAN GUI DI PLAYERGUI
 App.UI.Init = function()
 	pcall(function()
 		local old = PlayerGui:FindFirstChild("SpoofUI")
@@ -123,7 +130,6 @@ App.UI.Init = function()
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Padding = UDim.new(0, 5)
 
-	-- Fungsi modular untuk membuat toggle (mirip struktur 2PBT)
 	App.UI.CreateToggle = function(name, stateKey, featureModule)
 		local btn = Instance.new("TextButton", Content)
 		btn.Size = UDim2.new(1, 0, 0, 32)
