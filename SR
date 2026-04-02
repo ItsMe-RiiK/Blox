@@ -12,12 +12,13 @@ local App = {
     State = {
         SpoofWalkSpeed = false,
         SpoofFly = false,
+        NoClip = false,
     },
     Config = {
-        WalkValueAsli = 16,
-        WalkValueEksploit = 100,
+        RWS = 16,
+        SWS = 100,
         FlySpeed = 100,
-        StateAsli = Enum.HumanoidStateType.Running,
+        RTS = Enum.HumanoidStateType.Running,
     },
     Features = {},
     UI = {},
@@ -30,7 +31,7 @@ local App = {
 local CachedHumanoid = nil
 local function UpdateHumanoidCache()
     local char = LocalPlayer.Character
-    CachedHumanoid = char and char:FindFirstChildOfClass("Humanoid")
+    CachedHumanoid = char and char:WaitForChild("Humanoid", 5)
 end
 
 LocalPlayer.CharacterAdded:Connect(UpdateHumanoidCache)
@@ -39,7 +40,7 @@ UpdateHumanoidCache()
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(self, key)
     if App.State.SpoofWalkSpeed and not checkcaller() and self == CachedHumanoid and key == "WalkSpeed" then
-        return App.Config.WalkValueAsli
+        return App.Config.RWS
     end
     return oldIndex(self, key)
 end)
@@ -48,15 +49,56 @@ local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod()
     if App.State.SpoofFly and not checkcaller() and self == CachedHumanoid and method == "GetState" then
-        return App.Config.StateAsli
+        return App.Config.RTS
     end
     return oldNamecall(self, ...)
 end)
 
 App.Features.WalkSpeed = {
-    Update = function()
+    Enable = function()
+        if not CachedHumanoid then return end
+        CachedHumanoid.WalkSpeed = App.Config.SWS
+        
+        App.Connections.WSKeep = CachedHumanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+            if App.State.SpoofWalkSpeed and CachedHumanoid.WalkSpeed ~= App.Config.SWS then
+                CachedHumanoid.WalkSpeed = App.Config.SWS
+            end
+        end)
+    end,
+    Disable = function()
+        if App.Connections.WSKeep then App.Connections.WSKeep:Disconnect() end
+        if CachedHumanoid then CachedHumanoid.WalkSpeed = App.Config.RWS end
+    end,
+    UpdateValue = function(newVal)
+        App.Config.SWS = newVal
         if App.State.SpoofWalkSpeed and CachedHumanoid then
-            CachedHumanoid.WalkSpeed = App.Config.WalkValueEksploit
+            CachedHumanoid.WalkSpeed = newVal
+        end
+    end
+}
+
+App.Features.NoClip = {
+    Enable = function()
+        App.Connections.NoClip = RunService.Stepped:Connect(function()
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end,
+    Disable = function()
+        if App.Connections.NoClip then App.Connections.NoClip:Disconnect() end
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.CanCollide = true
+                end
+            end
         end
     end
 }
@@ -66,7 +108,6 @@ App.Features.Fly = {
     Enable = function()
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not root or not CachedHumanoid then return end
-
         CachedHumanoid.PlatformStand = true
         
         local bv = Instance.new("BodyVelocity", root)
@@ -79,7 +120,6 @@ App.Features.Fly = {
         bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
         bg.P = 9e4
     end,
-    
     Disable = function()
         if CachedHumanoid then CachedHumanoid.PlatformStand = false end
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -88,7 +128,6 @@ App.Features.Fly = {
             if root:FindFirstChild("SpoofFlyGyro") then root.SpoofFlyGyro:Destroy() end
         end
     end,
-
     Update = function()
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not root or not App.State.SpoofFly then return end
@@ -117,8 +156,12 @@ App.Features.Fly = {
 }
 
 App.UI.Init = function()
+    pcall(function()
+        if PlayerGui:FindFirstChild("SpoofPanelV3") then PlayerGui.SpoofPanelV3:Destroy() end
+    end)
+
     local sg = Instance.new("ScreenGui", PlayerGui)
-    sg.Name = "SpoofPanelV2"
+    sg.Name = "SpoofPanelV3"
     sg.ResetOnSpawn = false
 
     local MobileBtn = Instance.new("TextButton", sg)
@@ -130,33 +173,53 @@ App.UI.Init = function()
     Instance.new("UICorner", MobileBtn)
 
     local MainFrame = Instance.new("Frame", sg)
-    MainFrame.Size = UDim2.new(0, 220, 0, 300)
-    MainFrame.Position = UDim2.new(0.5, -110, 0.5, -150)
+    MainFrame.Size = UDim2.new(0, 220, 0, 340)
+    MainFrame.Position = UDim2.new(0.5, -110, 0.5, -170)
     MainFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 30)
-    MainFrame.Visible = true
+    MainFrame.Visible = false
     Instance.new("UICorner", MainFrame)
+
+    local CloseBtn = Instance.new("TextButton", MainFrame)
+    CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+    CloseBtn.Position = UDim2.new(1, -35, 0, 5)
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    CloseBtn.Text = "X"
+    CloseBtn.Font = Enum.Font.GothamBold
+    CloseBtn.TextColor3 = Color3.new(1,1,1)
+    Instance.new("UICorner", CloseBtn)
 
     local dragging, dragInput, dragStart, startPos
     MainFrame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true; dragStart = input.Position; startPos = MainFrame.Position
+            dragging = true
+            dragStart = input.Position
+            startPos = MainFrame.AbsolutePosition
         end
     end)
     UIS.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
-            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            local screen = workspace.CurrentCamera.ViewportSize
+            
+            local newX = math.clamp(startPos.X + delta.X, 0, screen.X - MainFrame.AbsoluteSize.X)
+            local newY = math.clamp(startPos.Y + delta.Y, 0, screen.Y - MainFrame.AbsoluteSize.Y)
+            
+            MainFrame.Position = UDim2.new(0, newX, 0, newY)
         end
     end)
-    UIS.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+    UIS.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
 
-    local function ToggleUI() MainFrame.Visible = not MainFrame.Visible end
+    local function ToggleUI()
+        MainFrame.Visible = not MainFrame.Visible
+        MobileBtn.Visible = not MainFrame.Visible
+    end
     MobileBtn.MouseButton1Click:Connect(ToggleUI)
+    CloseBtn.MouseButton1Click:Connect(ToggleUI)
     UIS.InputBegan:Connect(function(i, g) if not g and i.KeyCode == App.Hotkeys.MainFrame then ToggleUI() end end)
 
     local Content = Instance.new("ScrollingFrame", MainFrame)
-    Content.Size = UDim2.new(1, -10, 1, -40)
-    Content.Position = UDim2.new(0, 5, 0, 35)
+    Content.Size = UDim2.new(1, -10, 1, -45)
+    Content.Position = UDim2.new(0, 5, 0, 40)
     Content.BackgroundTransparency = 1
     Content.ScrollBarThickness = 2
     local layout = Instance.new("UIListLayout", Content)
@@ -181,7 +244,7 @@ App.UI.Init = function()
         end)
     end
 
-    local function CreateInput(placeholder, configKey)
+    local function CreateInput(placeholder, configKey, updateFunc)
         local box = Instance.new("TextBox", Content)
         box.Size = UDim2.new(1, 0, 0, 35)
         box.BackgroundColor3 = Color3.fromRGB(35, 35, 37)
@@ -189,17 +252,24 @@ App.UI.Init = function()
         box.Text = tostring(App.Config[configKey])
         box.TextColor3 = Color3.new(1,1,1)
         Instance.new("UICorner", box)
-        box.FocusLost:Connect(function() App.Config[configKey] = tonumber(box.Text) or App.Config[configKey] end)
+        box.FocusLost:Connect(function() 
+            local val = tonumber(box.Text)
+            if val then
+                if updateFunc then updateFunc(val) else App.Config[configKey] = val end
+            else
+                box.Text = tostring(App.Config[configKey])
+            end
+        end)
     end
 
-    CreateToggle("Spoof WalkSpeed", "SpoofWalkSpeed")
-    CreateInput("WalkSpeed Value", "WalkValueEksploit")
+    CreateToggle("Spoof WalkSpeed", "SpoofWalkSpeed", App.Features.WalkSpeed)
+    CreateInput("WalkSpeed Value", "SWS", App.Features.WalkSpeed.UpdateValue)
     CreateToggle("Spoof Fly", "SpoofFly", App.Features.Fly)
     CreateInput("Fly Speed Value", "FlySpeed")
+    CreateToggle("NoClip", "NoClip", App.Features.NoClip)
 end
 
 RunService.Heartbeat:Connect(function()
-    App.Features.WalkSpeed.Update()
     App.Features.Fly.Update()
 end)
 
