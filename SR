@@ -155,9 +155,24 @@ App.Features.Fly = {
     end
 }
 
+App.Features.DexExplorer = function()
+	pcall(function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))()
+	end)
+end
+
+App.Features.SimpleSpy = function()
+	pcall(function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/SimpleSpyV3/main.lua"))()
+	end)
+end
+
+-- separate UI and Feature
 App.UI.Init = function()
     pcall(function()
-        if PlayerGui:FindFirstChild("SpoofPanelV3") then PlayerGui.SpoofPanelV3:Destroy() end
+        if PlayerGui:FindFirstChild("SpoofPanelV3") then
+            PlayerGui.SpoofPanelV3:Destroy()
+        end
     end)
 
     local sg = Instance.new("ScreenGui", PlayerGui)
@@ -267,6 +282,8 @@ App.UI.Init = function()
     CreateToggle("Spoof Fly", "SpoofFly", App.Features.Fly)
     CreateInput("Fly Speed Value", "FlySpeed")
     CreateToggle("NoClip", "NoClip", App.Features.NoClip)
+    CreateToggle("Dex Explorer", "DexExplorer", { Enable = App.Features.DexExplorer })
+    CreateToggle("Simple Spy", "SimpleSpy", { Enable = App.Features.SimpleSpy })
 end
 
 RunService.Heartbeat:Connect(function()
