@@ -14,6 +14,7 @@ local App = {
 	State = {
 		ESP = false,
 		WalkSpeed = false,
+		Aimbot = false,
 	},
 
 	Config = {
@@ -35,134 +36,112 @@ App.AddConnection = function(name, conn)
 	App.Connections[name] = conn
 end
 
-local espObjects = setmetatable({}, { __mode = "k" })
-
-local function isTeammate(p)
-	if p == LocalPlayer then return true end
-
-	if p.Team and LocalPlayer.Team and p.Team == LocalPlayer.Team then
-		return true
-	end
-
-	if p.TeamColor and LocalPlayer.TeamColor and p.TeamColor == LocalPlayer.TeamColor then
-		if p.TeamColor.Name ~= "White" and p.TeamColor.Name ~= "Medium stone grey" then
-			return true
-		end
-	end
-
-	local myStats = LocalPlayer:FindFirstChild("leaderstats")
-	local pStats = p:FindFirstChild("leaderstats")
-	if myStats and pStats then
-		local myTeamVal = myStats:FindFirstChild("Team") or myStats:FindFirstChild("Tim")
-		local pTeamVal = pStats:FindFirstChild("Team") or pStats:FindFirstChild("Tim")
-		if myTeamVal and pTeamVal and myTeamVal.Value == pTeamVal.Value and myTeamVal.Value ~= "" then
-			return true
-		end
-	end
-
-	local myAttr = LocalPlayer:GetAttribute("Team")
-	local pAttr = p:GetAttribute("Team")
-	if myAttr and pAttr and myAttr == pAttr then
-		return true
-	end
-
-	return false
-end
-
-local function getESPColor(p)
-	if isTeammate(p) then
-		return Color3.fromRGB(0, 200, 0)
-	else 
-		return Color3.fromRGB(200, 40, 40)
-	end
-end
-
-local function clearESPForPlayer(p)
-	if not p then return end
-	local list = espObjects[p]
-	if list then
-		for _, v in pairs(list) do
-			if v and v.Parent then
-				pcall(function() v:Destroy() end)
-			end
-		end
-		espObjects[p] = nil
-	end
-end
-
-local function createESPForPlayer(p)
-	local char = p.Character
-	if not char then return end
-
-	local head = char:FindFirstChild("Head")
-	if not head then return end
-
-	clearESPForPlayer(p)
-
-	local hl = Instance.new("Highlight")
-	hl.Name = "ESP"
-	hl.Adornee = char
-	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-	hl.OutlineTransparency = 0
-	hl.OutlineColor = getESPColor(p)
-	hl.FillTransparency = 1 
-	hl.FillColor = getESPColor(p) 
-	hl.Parent = char
-
-	local bg = Instance.new("BillboardGui")
-	bg.Name = "Name"
-	bg.Adornee = head
-	bg.Size = UDim2.new(0, 200, 0, 50) 
-	bg.StudsOffset = Vector3.new(0, 4, 0) 
-	bg.AlwaysOnTop = true
-	bg.MaxDistance = math.huge
-	bg.Parent = PlayerGui 
-
-	local lab = Instance.new("TextLabel", bg)
-	lab.Size = UDim2.new(1, 0, 1, 0)
-	lab.BackgroundTransparency = 1
-	lab.TextStrokeTransparency = 0
-	lab.TextStrokeColor3 = Color3.new(0,0,0)
-	lab.Font = Enum.Font.GothamBold
-	lab.TextSize = 13
-	lab.TextColor3 = getESPColor(p)
-	lab.Text = p.Name
-
-	espObjects[p] = { hl, bg }
-end
-
+local ESP_COLOR = Color3.fromRGB(200, 40, 40)
 App.Features.ESP = {
 	Enable = function()
 		App.AddConnection("ESP_Loop", RunService.Heartbeat:Connect(function()
 			for _, p in ipairs(Players:GetPlayers()) do
 				if p ~= LocalPlayer then
 					local char = p.Character
-					if char and char:FindFirstChild("Head") then
-						local currentObjects = espObjects[p]
-						local hasESP = currentObjects and currentObjects[1] and currentObjects[1].Parent == char
+					if char then
+						local head = char:FindFirstChild("Head")
+						local hum = char:FindFirstChildOfClass("Humanoid")
 						
-						if not hasESP then
-							createESPForPlayer(p)
-						end
-					else
-						if espObjects[p] then
-							clearESPForPlayer(p)
+						if head and hum and hum.Health > 0 then
+							
+							if not char:FindFirstChild("2PBT_ESP_HL") then
+								local hl = Instance.new("Highlight")
+								hl.Name = "2PBT_ESP_HL"
+								hl.Adornee = char
+								hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+								hl.OutlineTransparency = 0
+								hl.OutlineColor = ESP_COLOR
+								hl.FillTransparency = 1 
+								hl.FillColor = ESP_COLOR
+								hl.Parent = char
+							end
+							
+							if not head:FindFirstChild("2PBT_ESP_BG") then
+								local bg = Instance.new("BillboardGui")
+								bg.Name = "2PBT_ESP_BG"
+								bg.Adornee = head
+								bg.Size = UDim2.new(0, 200, 0, 50) 
+								bg.StudsOffset = Vector3.new(0, 4, 0) 
+								bg.AlwaysOnTop = true
+								bg.MaxDistance = math.huge
+								bg.Parent = head
+								
+								local lab = Instance.new("TextLabel", bg)
+								lab.Size = UDim2.new(1, 0, 1, 0)
+								lab.BackgroundTransparency = 1
+								lab.TextStrokeTransparency = 0
+								lab.TextStrokeColor3 = Color3.new(0,0,0)
+								lab.Font = Enum.Font.GothamBold
+								lab.TextSize = 13
+								lab.TextColor3 = ESP_COLOR
+								lab.Text = p.Name
+							end
 						end
 					end
 				end
 			end
 		end))
-		
-		App.AddConnection("ESP_PlayerRemoving", Players.PlayerRemoving:Connect(clearESPForPlayer))
 	end,
 	
 	Disable = function()
 		if App.Connections["ESP_Loop"] then App.Connections["ESP_Loop"]:Disconnect() end
-		if App.Connections["ESP_PlayerRemoving"] then App.Connections["ESP_PlayerRemoving"]:Disconnect() end
-
-		for p, _ in pairs(espObjects) do
-			clearESPForPlayer(p)
+		
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer and p.Character then
+				local hl = p.Character:FindFirstChild("2PBT_ESP_HL")
+				if hl then hl:Destroy() end
+				
+				local head = p.Character:FindFirstChild("Head")
+				if head then
+					local bg = head:FindFirstChild("2PBT_ESP_BG")
+					if bg then bg:Destroy() end
+				end
+			end
 		end
+	end
+}
+
+
+App.Features.Aimbot = {
+	Enable = function()
+		App.AddConnection("Aimbot_Render", RunService.RenderStepped:Connect(function()
+			if not App.State.Aimbot then return end
+
+			local cam = Workspace.CurrentCamera
+			local closestPlayer = nil
+			local shortestDist = math.huge
+			local mousePos = UIS:GetMouseLocation()
+
+			for _, p in ipairs(Players:GetPlayers()) do
+				if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
+					local hum = p.Character:FindFirstChildOfClass("Humanoid")
+					if hum and hum.Health > 0 then
+						local pos, onScreen = cam:WorldToViewportPoint(p.Character.Head.Position)
+						if onScreen then
+							local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+							if dist < shortestDist then
+								closestPlayer = p
+								shortestDist = dist
+							end
+						end
+					end
+				end
+			end
+
+			if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head") then
+				local headPos = closestPlayer.Character.Head.Position
+				cam.CFrame = CFrame.new(cam.CFrame.Position, headPos)
+			end
+		end))
+	end,
+
+	Disable = function()
+		if App.Connections["Aimbot_Render"] then App.Connections["Aimbot_Render"]:Disconnect() end
 	end
 }
 
@@ -437,6 +416,7 @@ App.UI.Init = function()
 
     App.UI.CreateSeparator("Features")
 	App.UI.CreateToggle("ESP (Name & Highlight)", "ESP", App.Features.ESP, "(F1)")
+	App.UI.CreateToggle("Aimbot (Auto Lock)", "Aimbot", App.Features.Aimbot, "(F2)")
 	
 	App.UI.CreateSeparator("WalkSpeed Settings")
 	App.UI.CreateTextBox("WalkSpeed Value", App.Config.WalkValue, function(text)
