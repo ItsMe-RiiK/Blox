@@ -18,7 +18,9 @@ local App = {
 	},
 
 	Config = {
-		WalkValue = 23,
+		WalkValue = 30,
+		AimbotFOV = 100,
+		AimbotLerp = 1,
 	},
 
 	Connections = {},
@@ -106,7 +108,6 @@ App.Features.ESP = {
 	end
 }
 
-
 App.Features.Aimbot = {
 	Enable = function()
 		App.AddConnection("Aimbot_Render", RunService.RenderStepped:Connect(function()
@@ -115,18 +116,34 @@ App.Features.Aimbot = {
 			local cam = Workspace.CurrentCamera
 			local closestPlayer = nil
 			local shortestDist = math.huge
-			local mousePos = UIS:GetMouseLocation()
+			
+			local viewportSize = cam.ViewportSize
+			local screenCenter = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
+			local maxFOV = App.Config.AimbotFOV 
+
+			local rayParams = RaycastParams.new()
+			rayParams.FilterType = Enum.RaycastFilterType.Exclude
+			rayParams.IgnoreWater = true
 
 			for _, p in ipairs(Players:GetPlayers()) do
 				if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
 					local hum = p.Character:FindFirstChildOfClass("Humanoid")
 					if hum and hum.Health > 0 then
 						local pos, onScreen = cam:WorldToViewportPoint(p.Character.Head.Position)
+						
 						if onScreen then
-							local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-							if dist < shortestDist then
-								closestPlayer = p
-								shortestDist = dist
+							local dist = (Vector2.new(pos.X, pos.Y) - screenCenter).Magnitude
+							if dist < shortestDist and dist <= maxFOV then
+								rayParams.FilterDescendantsInstances = {LocalPlayer.Character, p.Character}
+								
+								local origin = cam.CFrame.Position
+								local direction = p.Character.Head.Position - origin
+								local rayResult = Workspace:Raycast(origin, direction, rayParams)
+								
+								if not rayResult then
+									closestPlayer = p
+									shortestDist = dist
+								end
 							end
 						end
 					end
@@ -135,7 +152,9 @@ App.Features.Aimbot = {
 
 			if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head") then
 				local headPos = closestPlayer.Character.Head.Position
-				cam.CFrame = CFrame.new(cam.CFrame.Position, headPos)
+				local targetCFrame = CFrame.new(cam.CFrame.Position, headPos)
+				
+				cam.CFrame = cam.CFrame:Lerp(targetCFrame, App.Config.AimbotLerp)
 			end
 		end))
 	end,
@@ -416,7 +435,17 @@ App.UI.Init = function()
 
     App.UI.CreateSeparator("Features")
 	App.UI.CreateToggle("ESP (Name & Highlight)", "ESP", App.Features.ESP, "(F1)")
-	App.UI.CreateToggle("Aimbot (Auto Lock)", "Aimbot", App.Features.Aimbot, "(F2)")
+	App.UI.CreateToggle("Aimbot (Visible Check)", "Aimbot", App.Features.Aimbot, "(F2)")
+	
+	App.UI.CreateSeparator("Aimbot Settings")
+	App.UI.CreateTextBox("FOV Limit (Default: 250)", App.Config.AimbotFOV, function(text)
+		local val = tonumber(text)
+		if val then App.Config.AimbotFOV = val end
+	end)
+	App.UI.CreateTextBox("Smoothness (0.01 - 1)", App.Config.AimbotLerp, function(text)
+		local val = tonumber(text)
+		if val then App.Config.AimbotLerp = math.clamp(val, 0.01, 1) end
+	end)
 	
 	App.UI.CreateSeparator("WalkSpeed Settings")
 	App.UI.CreateTextBox("WalkSpeed Value", App.Config.WalkValue, function(text)
