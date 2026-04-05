@@ -1,0 +1,477 @@
+if not game:IsLoaded() then
+	game.Loaded:Wait()
+end
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local App = {
+	State = {
+		ESP = false,
+		WalkSpeed = false,
+	},
+
+	Config = {
+		WalkValue = 23,
+	},
+
+	Connections = {},
+	UI = {},
+	Features = {},
+	Hotkeys = {
+		MainFrame = Enum.KeyCode.LeftAlt,
+	},
+}
+
+App.AddConnection = function(name, conn)
+	if App.Connections[name] then
+		App.Connections[name]:Disconnect()
+	end
+	App.Connections[name] = conn
+end
+
+local espObjects = setmetatable({}, { __mode = "k" })
+
+local function isTeammate(p)
+	if p == LocalPlayer then return true end
+
+	if p.Team and LocalPlayer.Team and p.Team == LocalPlayer.Team then
+		return true
+	end
+
+	if p.TeamColor and LocalPlayer.TeamColor and p.TeamColor == LocalPlayer.TeamColor then
+		if p.TeamColor.Name ~= "White" and p.TeamColor.Name ~= "Medium stone grey" then
+			return true
+		end
+	end
+
+	local myStats = LocalPlayer:FindFirstChild("leaderstats")
+	local pStats = p:FindFirstChild("leaderstats")
+	if myStats and pStats then
+		local myTeamVal = myStats:FindFirstChild("Team") or myStats:FindFirstChild("Tim")
+		local pTeamVal = pStats:FindFirstChild("Team") or pStats:FindFirstChild("Tim")
+		if myTeamVal and pTeamVal and myTeamVal.Value == pTeamVal.Value and myTeamVal.Value ~= "" then
+			return true
+		end
+	end
+
+	local myAttr = LocalPlayer:GetAttribute("Team")
+	local pAttr = p:GetAttribute("Team")
+	if myAttr and pAttr and myAttr == pAttr then
+		return true
+	end
+
+	return false
+end
+
+local function getESPColor(p)
+	if isTeammate(p) then
+		return Color3.fromRGB(0, 200, 0)
+	else 
+		return Color3.fromRGB(200, 40, 40)
+	end
+end
+
+local function clearESPForPlayer(p)
+	if not p then return end
+	local list = espObjects[p]
+	if list then
+		for _, v in pairs(list) do
+			if v and v.Parent then
+				pcall(function() v:Destroy() end)
+			end
+		end
+		espObjects[p] = nil
+	end
+end
+
+local function createESPForPlayer(p)
+	local char = p.Character
+	if not char then return end
+
+	local head = char:FindFirstChild("Head")
+	if not head then return end
+
+	clearESPForPlayer(p)
+
+	local hl = Instance.new("Highlight")
+	hl.Name = "ESP"
+	hl.Adornee = char
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.OutlineTransparency = 0
+	hl.OutlineColor = getESPColor(p)
+	hl.FillTransparency = 1 
+	hl.FillColor = getESPColor(p) 
+	hl.Parent = char
+
+	local bg = Instance.new("BillboardGui")
+	bg.Name = "Name"
+	bg.Adornee = head
+	bg.Size = UDim2.new(0, 200, 0, 50) 
+	bg.StudsOffset = Vector3.new(0, 4, 0) 
+	bg.AlwaysOnTop = true
+	bg.MaxDistance = math.huge
+	bg.Parent = PlayerGui 
+
+	local lab = Instance.new("TextLabel", bg)
+	lab.Size = UDim2.new(1, 0, 1, 0)
+	lab.BackgroundTransparency = 1
+	lab.TextStrokeTransparency = 0
+	lab.TextStrokeColor3 = Color3.new(0,0,0)
+	lab.Font = Enum.Font.GothamBold
+	lab.TextSize = 13
+	lab.TextColor3 = getESPColor(p)
+	lab.Text = p.Name
+
+	espObjects[p] = { hl, bg }
+end
+
+App.Features.ESP = {
+	Enable = function()
+		App.AddConnection("ESP_Loop", RunService.Heartbeat:Connect(function()
+			for _, p in ipairs(Players:GetPlayers()) do
+				if p ~= LocalPlayer then
+					local char = p.Character
+					if char and char:FindFirstChild("Head") then
+						local currentObjects = espObjects[p]
+						local hasESP = currentObjects and currentObjects[1] and currentObjects[1].Parent == char
+						
+						if not hasESP then
+							createESPForPlayer(p)
+						end
+					else
+						if espObjects[p] then
+							clearESPForPlayer(p)
+						end
+					end
+				end
+			end
+		end))
+		
+		App.AddConnection("ESP_PlayerRemoving", Players.PlayerRemoving:Connect(clearESPForPlayer))
+	end,
+	
+	Disable = function()
+		if App.Connections["ESP_Loop"] then App.Connections["ESP_Loop"]:Disconnect() end
+		if App.Connections["ESP_PlayerRemoving"] then App.Connections["ESP_PlayerRemoving"]:Disconnect() end
+
+		for p, _ in pairs(espObjects) do
+			clearESPForPlayer(p)
+		end
+	end
+}
+
+local OriginalWalkSpeeds = {}
+App.Features.WalkSpeed = {
+	Enable = function()
+		local char = LocalPlayer.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum then
+				if not OriginalWalkSpeeds[char] then
+					OriginalWalkSpeeds[char] = hum.WalkSpeed
+				end
+				hum.WalkSpeed = App.Config.WalkValue
+			end
+		end
+	end,
+	
+	Disable = function()
+		local char = LocalPlayer.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum and OriginalWalkSpeeds[char] then
+				hum.WalkSpeed = OriginalWalkSpeeds[char]
+			end
+		end
+	end,
+	
+	Update = function()
+		local char = LocalPlayer.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum and hum.WalkSpeed ~= App.Config.WalkValue then
+				if not OriginalWalkSpeeds[char] then
+					OriginalWalkSpeeds[char] = hum.WalkSpeed
+				end
+				hum.WalkSpeed = App.Config.WalkValue
+			end
+		end
+	end
+}
+
+
+App.UI.Init = function()
+	pcall(function()
+		local old = PlayerGui:FindFirstChild("2PBT")
+		if old then
+			old:Destroy()
+		end
+	end)
+
+	local MainScreenGui = Instance.new("ScreenGui")
+	MainScreenGui.Name = "2PBT"
+	MainScreenGui.DisplayOrder = 9999
+	MainScreenGui.ResetOnSpawn = false
+	MainScreenGui.Parent = PlayerGui
+
+	local MainFrame = Instance.new("Frame", MainScreenGui)
+	MainFrame.Name = "MainFrame"
+	MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+	MainFrame.Size = UDim2.new(1, -20, 1, -20)
+	MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+	MainFrame.BackgroundColor3 = Color3.fromRGB(28,28,30)
+	MainFrame.BorderSizePixel = 0
+	Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0,10)
+	
+	local uiSizeConstraint = Instance.new("UISizeConstraint", MainFrame)
+	uiSizeConstraint.MaxSize = Vector2.new(250, 500)
+	
+	App.UI.MainFrame = MainFrame
+
+	local OpenBtn = Instance.new("TextButton", MainScreenGui)
+	OpenBtn.Name = "OpenUIBtn"
+	OpenBtn.Size = UDim2.new(0, 45, 0, 45)
+	OpenBtn.Position = UDim2.new(1, -55, 0, 2)
+	OpenBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+	OpenBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+	OpenBtn.Font = Enum.Font.GothamBold
+	OpenBtn.TextSize = 22
+	OpenBtn.Text = "⚙️"
+	Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 8)
+	OpenBtn.Visible = false
+	App.UI.OpenBtn = OpenBtn
+
+	App.UI.ToggleMainFrame = function()
+    	if App.UI.MainFrame and App.UI.OpenBtn then
+        	local isVisible = App.UI.MainFrame.Visible
+        	App.UI.MainFrame.Visible = not isVisible
+        	App.UI.OpenBtn.Visible = isVisible
+    	end
+	end
+	
+	OpenBtn.MouseButton1Click:Connect(App.UI.ToggleMainFrame)
+
+	local TitleBar = Instance.new("Frame", MainFrame)
+	TitleBar.Size = UDim2.new(1,0,0,36)
+	TitleBar.BackgroundTransparency = 1
+
+	local DragHandle = Instance.new("TextLabel", TitleBar)
+	DragHandle.Size = UDim2.new(0,28,0,28)
+	DragHandle.Position = UDim2.new(0,8,0,4)
+	DragHandle.BackgroundTransparency = 1
+	DragHandle.Font = Enum.Font.Gotham
+	DragHandle.TextSize = 20
+	DragHandle.TextColor3 = Color3.fromRGB(200,200,200)
+	DragHandle.Text = "≡"
+
+	local TitleLabel = Instance.new("TextLabel", TitleBar)
+	TitleLabel.Size = UDim2.new(1,-110,1,0)
+	TitleLabel.Position = UDim2.new(0.12,0,0,0)
+	TitleLabel.BackgroundTransparency = 1
+	TitleLabel.Font = Enum.Font.GothamBold
+	TitleLabel.TextSize = 14
+	TitleLabel.TextColor3 = Color3.fromRGB(245,245,245)
+	TitleLabel.Text = "2PBT LITE"
+	TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+	local MinBtn = Instance.new("TextButton", TitleBar)
+	MinBtn.Size = UDim2.new(0,36,0,28)
+	MinBtn.Position = UDim2.new(1,-42,0,4)
+	MinBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+	MinBtn.Font = Enum.Font.GothamBold
+	MinBtn.TextSize = 18
+	MinBtn.TextColor3 = Color3.fromRGB(240,240,240)
+	MinBtn.Text = "-"
+	Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0,6)
+
+	MinBtn.MouseButton1Click:Connect(App.UI.ToggleMainFrame)
+
+	local Content = Instance.new("ScrollingFrame", MainFrame)
+	Content.Name = "Content"
+	Content.Size = UDim2.new(1,-10,1,-50)
+	Content.Position = UDim2.new(0,5,0,44)
+	Content.BackgroundTransparency = 1
+	Content.ScrollBarThickness = 6
+	Content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	Content.CanvasSize = UDim2.new(0,0,0,0)
+	
+	local contentPadding = Instance.new("UIPadding", Content)
+	contentPadding.PaddingLeft = UDim.new(0, 5)
+	contentPadding.PaddingRight = UDim.new(0, 5)
+	contentPadding.PaddingTop = UDim.new(0, 5)
+	contentPadding.PaddingBottom = UDim.new(0, 5)
+
+	local listLayout = Instance.new("UIListLayout", Content)
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Padding = UDim.new(0,5)
+	
+	App.UI.Content = Content
+
+	local dragging, dragInput, dragStart, startPosPixels
+	
+	local function getScreenSize()
+		return workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
+	end
+	
+	local function toPixels(udim2)
+		local screen = getScreenSize()
+		return Vector2.new(udim2.X.Offset + udim2.X.Scale * screen.X, udim2.Y.Offset + udim2.Y.Scale * screen.Y)
+	end
+	
+	local function getInputPos(input)
+		return (input and input.Position) and Vector2.new(input.Position.X, input.Position.Y) or UIS:GetMouseLocation()
+	end
+	
+	TitleBar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragInput = input
+			dragStart = getInputPos(input)
+			startPosPixels = toPixels(MainFrame.Position)
+		end
+	end)
+	
+	App.AddConnection("DragChanged", UIS.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local currentPos = getInputPos(input)
+			local delta = currentPos - dragStart
+			local frameSize = MainFrame.AbsoluteSize
+			local screen = getScreenSize()
+			
+			local minX, maxX = frameSize.X / 2, screen.X - (frameSize.X / 2)
+			local minY, maxY = frameSize.Y / 2, screen.Y - (frameSize.Y / 2)
+			
+			local newX = math.clamp(startPosPixels.X + delta.X, minX, math.max(minX, maxX))
+			local newY = math.clamp(startPosPixels.Y + delta.Y, minY, math.max(minY, maxY))
+			
+			MainFrame.Position = UDim2.new(0, newX, 0, newY)
+		end
+	end))
+	
+	App.AddConnection("DragEnded", UIS.InputEnded:Connect(function(input)
+		if input == dragInput then
+			dragging = false
+		end
+	end))
+
+	App.UI.CreateToggle = function(name, stateKey, featureModule, hotkeyStr)
+		local btn = Instance.new("TextButton", App.UI.Content)
+		btn.Size = UDim2.new(1, 0, 0, 32)
+		btn.BackgroundColor3 = Color3.fromRGB(36,36,36)
+		btn.TextColor3 = Color3.fromRGB(235,235,235)
+		btn.Font = Enum.Font.Gotham
+		btn.TextSize = 14
+		btn.Text = name .. " [OFF] " .. (hotkeyStr or "")
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
+
+		local function Toggle()
+			App.State[stateKey] = not App.State[stateKey]
+
+			if featureModule then
+				if App.State[stateKey] and featureModule.Enable then
+					featureModule.Enable()
+				end
+
+				if not App.State[stateKey] and featureModule.Disable then
+					featureModule.Disable()
+				end
+			end
+
+			local isActive = App.State[stateKey]
+			btn.Text = name .. " [" .. (isActive and "ON" or "OFF") .. "] " .. (hotkeyStr or "")
+			btn.BackgroundColor3 = isActive and Color3.fromRGB(80,150,220) or Color3.fromRGB(36,36,36)
+		end
+
+		btn.MouseButton1Click:Connect(Toggle)
+
+		if hotkeyStr then
+			local keyString = string.match(hotkeyStr, "%((%w+)%)")
+			if keyString and Enum.KeyCode[keyString] then
+				App.Hotkeys["TOGGLE_"..keyString] = Toggle 
+			end
+		end
+
+		return btn
+	end
+
+    App.UI.CreateSeparator = function(text)
+		local lab = Instance.new("TextLabel", App.UI.Content)
+		lab.Size = UDim2.new(1,0,0,25)
+		lab.BackgroundTransparency = 1
+		lab.Font = Enum.Font.Gotham
+		lab.TextSize = 12
+		lab.TextColor3 = Color3.fromRGB(170,170,170)
+		lab.Text = "─────────  " .. (text or "") .. "  ─────────"
+		lab.TextXAlignment = Enum.TextXAlignment.Center
+		return lab
+	end
+
+	App.UI.CreateTextBox = function(placeholder, defaultText, callback)
+		local frame = Instance.new("Frame", App.UI.Content)
+		frame.Size = UDim2.new(1,0,0,30)
+		frame.BackgroundTransparency = 1
+		
+		local box = Instance.new("TextBox", frame)
+		box.Size = UDim2.new(1,0,1,0)
+		box.BackgroundColor3 = Color3.fromRGB(40,40,40)
+		box.TextColor3 = Color3.fromRGB(255,255,255)
+		box.Font = Enum.Font.Gotham
+		box.TextSize = 13
+		box.PlaceholderText = placeholder
+		box.Text = tostring(defaultText)
+		Instance.new("UICorner", box).CornerRadius = UDim.new(0,6)
+		
+		box.FocusLost:Connect(function()
+			if callback then
+				callback(box.Text)
+			end
+		end)
+		return box
+	end
+
+    App.UI.CreateSeparator("Features")
+	App.UI.CreateToggle("ESP (Name & Highlight)", "ESP", App.Features.ESP, "(F1)")
+	
+	App.UI.CreateSeparator("WalkSpeed Settings")
+	App.UI.CreateTextBox("WalkSpeed Value", App.Config.WalkValue, function(text)
+		local val = tonumber(text)
+		if val then
+			App.Config.WalkValue = val 
+		end
+	end)
+
+	App.UI.CreateToggle("WalkSpeed", "WalkSpeed", App.Features.WalkSpeed, "(F3)")
+end
+
+UIS.InputBegan:Connect(function(input, gp)
+	if gp then
+		return
+	end
+	
+	if input.KeyCode == App.Hotkeys.MainFrame then
+		if App.UI.ToggleMainFrame then
+			App.UI.ToggleMainFrame()
+		end
+		return
+	end
+	
+	local keyName = input.KeyCode.Name
+	local toggleFunc = App.Hotkeys["TOGGLE_"..keyName]
+	if toggleFunc and type(toggleFunc) == "function" then
+		toggleFunc()
+	end
+end)
+
+RunService.Heartbeat:Connect(function()
+	if App.State.WalkSpeed and App.Features.WalkSpeed and App.Features.WalkSpeed.Update then
+		App.Features.WalkSpeed.Update()
+	end
+end)
+
+App.UI.Init()
